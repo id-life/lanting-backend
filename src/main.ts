@@ -5,7 +5,7 @@ import { AppModule } from "./app.module"
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
 
-  const PORT = process?.env.PORT ?? 8000
+  const PORT = process.env.PORT ?? 8000
 
   await app.listen(PORT, () => {
     // eslint-disable-next-line no-console
