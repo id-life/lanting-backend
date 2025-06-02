@@ -11,6 +11,9 @@ importers:
       '@nestjs/common':
         specifier: ^11.0.1
         version: 11.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: ^4.0.2
+        version: 4.0.2(@nestjs/common@11.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@nestjs/core':
         specifier: ^11.0.1
         version: 11.1.2(@nestjs/common@11.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -23,6 +26,9 @@ importers:
       rxjs:
         specifier: ^7.8.1
         version: 7.8.2
+      zod:
+        specifier: ^3.25.48
+        version: 3.25.48
     devDependencies:
       '@ayingott/eslint-config':
         specifier: ^2.0.4
@@ -859,6 +865,12 @@ packages:
         optional: true
       class-validator:
         optional: true
+
+  '@nestjs/config@4.0.2':
+    resolution: {integrity: sha512-McMW6EXtpc8+CwTUwFdg6h7dYcBUpH5iUILCclAsa+MbCEvC9ZKu4dCHRlJqALuhjLw97pbQu62l4+wRwGeZqA==}
+    peerDependencies:
+      '@nestjs/common': ^10.0.0 || ^11.0.0
+      rxjs: ^7.1.0
 
   '@nestjs/core@11.1.2':
     resolution: {integrity: sha512-QRuyxwu0BjNfmmmunsw1ylX7RSyfDQHt+xD+tKncdtgiMOOzAu+LA1gB4WoZnw4frQkk+qZbhEbM61cIjOxD3w==}
@@ -2016,6 +2028,14 @@ packages:
 
   dotenv-expand@11.0.7:
     resolution: {integrity: sha512-zIHwmZPRshsCdpMDyVsqGmgyP0yT8GAgXUnkdAoJisxvf33k7yO6OuoKmcTGuXPWSsm8Oh88nZicRLA9Y0rUeA==}
+    engines: {node: '>=12'}
+
+  dotenv-expand@12.0.1:
+    resolution: {integrity: sha512-LaKRbou8gt0RNID/9RoI+J2rvXsBRPMV7p+ElHlPhcSARbCPDYcYG2s1TIzAfWv4YSgyY5taidWzzs31lNV3yQ==}
+    engines: {node: '>=12'}
+
+  dotenv@16.4.7:
+    resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
     engines: {node: '>=12'}
 
   dotenv@16.5.0:
@@ -4526,6 +4546,9 @@ packages:
     resolution: {integrity: sha512-cYVsTjKl8b+FrnidjibDWskAv7UKOfcwaVZdp/it9n1s9fU3IkgDbhdIRKCW4JDsAlECJY0ytoVPT3sK6kideA==}
     engines: {node: '>=18'}
 
+  zod@3.25.48:
+    resolution: {integrity: sha512-0X1mz8FtgEIvaxGjdIImYpZEaZMrund9pGXm3M6vM7Reba0e2eI71KPjSCGXBfwKDPwPoywf6waUKc3/tFvX2Q==}
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -5500,6 +5523,14 @@ snapshots:
       uid: 2.0.2
     transitivePeerDependencies:
       - supports-color
+
+  '@nestjs/config@4.0.2(@nestjs/common@11.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)':
+    dependencies:
+      '@nestjs/common': 11.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      dotenv: 16.4.7
+      dotenv-expand: 12.0.1
+      lodash: 4.17.21
+      rxjs: 7.8.2
 
   '@nestjs/core@11.1.2(@nestjs/common@11.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
@@ -6701,6 +6732,12 @@ snapshots:
   dotenv-expand@11.0.7:
     dependencies:
       dotenv: 16.5.0
+
+  dotenv-expand@12.0.1:
+    dependencies:
+      dotenv: 16.5.0
+
+  dotenv@16.4.7: {}
 
   dotenv@16.5.0: {}
 
@@ -9658,5 +9695,7 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yoctocolors-cjs@2.1.2: {}
+
+  zod@3.25.48: {}
 
   zwitch@2.0.4: {}

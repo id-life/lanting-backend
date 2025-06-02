@@ -1,15 +1,22 @@
-import process from "node:process"
 import { NestFactory } from "@nestjs/core"
 import { AppModule } from "./app.module"
+import { ConfigService } from "./config/config.service"
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
+  const configService = app.get(ConfigService)
 
-  const PORT = process.env.PORT ?? 8000
+  let serverURL = `http://localhost:${configService.port}`
 
-  await app.listen(PORT, () => {
+  if (configService.apiPrefix) {
+    app.setGlobalPrefix(configService.apiPrefix)
+    serverURL += configService.apiPrefix
+  }
+  app.enableCors()
+
+  await app.listen(configService.port, () => {
     // eslint-disable-next-line no-console
-    console.log(`Server is running at http://localhost:${PORT}`)
+    console.log(`Server is running at ${serverURL}`)
   })
 }
 
