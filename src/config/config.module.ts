@@ -10,6 +10,7 @@ import { configLoader } from "./loader"
       load: [configLoader],
       isGlobal: true,
       cache: true,
+      envFilePath: [".env", ".env.local"],
     }),
   ],
   providers: [ConfigService],
