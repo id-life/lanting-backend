@@ -7,7 +7,7 @@ COPY package*.json ./
 
 RUN corepack enable && \
     npm install @antfu/ni -g
-RUN nci
+RUN ni
 
 COPY . .
 
