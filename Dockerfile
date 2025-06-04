@@ -5,8 +5,9 @@ WORKDIR /app
 COPY package*.json ./
 #COPY prisma ./prisma/
 
-RUN npm install @antfu/ni -g
-RUN ni --frozen
+RUN corepack enable && \
+    npm install @antfu/ni -g
+RUN nci
 
 COPY . .
 
