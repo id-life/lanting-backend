@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from "@nestjs/common"
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from "@nestjs/common"
 import { PrismaService } from "../common/prisma/prisma.service"
 import { CreateArchiveDto } from "./dto/create-archive.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
@@ -6,6 +11,30 @@ import { UpdateArchiveDto } from "./dto/update-archive.dto"
 @Injectable()
 export class ArchivesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private handleError(error: any, operation: string) {
+    const errorResponse = {
+      success: false,
+      data: null,
+      message: error.message || `Failed to ${operation} archive`,
+    }
+
+    if (error instanceof NotFoundException) {
+      throw new NotFoundException(errorResponse)
+    }
+
+    if (error instanceof BadRequestException) {
+      throw new BadRequestException(errorResponse)
+    }
+
+    const ErrorClass =
+      operation === "fetch" ? InternalServerErrorException : BadRequestException
+
+    throw new ErrorClass({
+      ...errorResponse,
+      message: `Failed to ${operation} archive: ${error.message}`,
+    })
+  }
 
   async create(createArchiveDto: CreateArchiveDto) {
     try {
@@ -18,7 +47,7 @@ export class ArchivesService {
         data: archive,
       }
     } catch (error) {
-      throw new Error(`Failed to create archive: ${error.message}`)
+      this.handleError(error, "create")
     }
   }
 
@@ -34,7 +63,7 @@ export class ArchivesService {
         data: archives,
       }
     } catch (error) {
-      throw new Error(`Failed to fetch archives: ${error.message}`)
+      this.handleError(error, "fetch")
     }
   }
 
@@ -47,6 +76,7 @@ export class ArchivesService {
       if (!archive) {
         throw new NotFoundException({
           success: false,
+          data: null,
           message: `Archive with ID ${id} not found`,
         })
       }
@@ -56,10 +86,7 @@ export class ArchivesService {
         data: archive,
       }
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error
-      }
-      throw new Error(`Failed to fetch archive: ${error.message}`)
+      this.handleError(error, "fetch")
     }
   }
 
@@ -77,10 +104,7 @@ export class ArchivesService {
         data: archive,
       }
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error
-      }
-      throw new Error(`Failed to update archive: ${error.message}`)
+      this.handleError(error, "update")
     }
   }
 
@@ -97,10 +121,7 @@ export class ArchivesService {
         message: `Archive with ID ${id} deleted successfully`,
       }
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error
-      }
-      throw new Error(`Failed to delete archive: ${error.message}`)
+      this.handleError(error, "delete")
     }
   }
 }
