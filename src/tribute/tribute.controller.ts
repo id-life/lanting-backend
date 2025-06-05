@@ -20,11 +20,6 @@ export class TributeController {
     return this.tributeService.getContent(filename)
   }
 
-  @Post("save")
-  save() {
-    return this.tributeService.save()
-  }
-
   @Post("extract-html")
   extractHtml() {
     return this.tributeService.extractHtml()

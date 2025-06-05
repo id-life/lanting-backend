@@ -14,10 +14,6 @@ export class TributeService {
     return `This is GET /tribute/content/${filename} endpoint`
   }
 
-  save() {
-    return `This is POST /tribute/save endpoint`
-  }
-
   extractHtml() {
     return `This is POST /tribute/extract-html endpoint`
   }

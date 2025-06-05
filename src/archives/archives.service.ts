@@ -1,67 +1,106 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
+import { PrismaService } from "../common/prisma/prisma.service"
 import { CreateArchiveDto } from "./dto/create-archive.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 
-// TODO: Delete
-// This is a mock data source for demonstration purposes.
-const archives = [
-  {
-    id: 1,
-    title: "三国志",
-    author: "陈寿",
-    date: "280 CE",
-    content: "蜀书·先主传",
-  },
-  {
-    id: 2,
-    title: "史记",
-    author: "司马迁",
-    date: "94 BCE",
-    content: "货殖列传",
-  },
-  {
-    id: 3,
-    title: "资治通鉴",
-    author: "司马光",
-    date: "1084 CE",
-    content: "唐纪",
-  },
-]
 @Injectable()
 export class ArchivesService {
-  create(_createArchiveDto: CreateArchiveDto) {
-    return "This action adds a new archive"
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return {
-      success: true,
-      count: archives.length,
-      data: archives,
-    }
-  }
-
-  findOne(id: number) {
-    const archive = archives.find((archive) => archive.id === id)
-
-    if (!archive) {
-      throw new NotFoundException({
-        success: false,
-        data: null,
+  async create(createArchiveDto: CreateArchiveDto) {
+    try {
+      const archive = await this.prisma.archive.create({
+        data: createArchiveDto,
       })
-    }
 
-    return {
-      success: true,
-      data: archive,
+      return {
+        success: true,
+        data: archive,
+      }
+    } catch (error) {
+      throw new Error(`Failed to create archive: ${error.message}`)
     }
   }
 
-  update(id: number, _updateArchiveDto: UpdateArchiveDto) {
-    return `This action updates a #${id} archive`
+  async findAll() {
+    try {
+      const archives = await this.prisma.archive.findMany({
+        orderBy: { createdAt: "desc" },
+      })
+
+      return {
+        success: true,
+        count: archives.length,
+        data: archives,
+      }
+    } catch (error) {
+      throw new Error(`Failed to fetch archives: ${error.message}`)
+    }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} archive`
+  async findOne(id: number) {
+    try {
+      const archive = await this.prisma.archive.findUnique({
+        where: { id },
+      })
+
+      if (!archive) {
+        throw new NotFoundException({
+          success: false,
+          message: `Archive with ID ${id} not found`,
+        })
+      }
+
+      return {
+        success: true,
+        data: archive,
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error
+      }
+      throw new Error(`Failed to fetch archive: ${error.message}`)
+    }
+  }
+
+  async update(id: number, updateArchiveDto: UpdateArchiveDto) {
+    try {
+      await this.findOne(id)
+
+      const archive = await this.prisma.archive.update({
+        where: { id },
+        data: updateArchiveDto,
+      })
+
+      return {
+        success: true,
+        data: archive,
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error
+      }
+      throw new Error(`Failed to update archive: ${error.message}`)
+    }
+  }
+
+  async remove(id: number) {
+    try {
+      await this.findOne(id)
+
+      await this.prisma.archive.delete({
+        where: { id },
+      })
+
+      return {
+        success: true,
+        message: `Archive with ID ${id} deleted successfully`,
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error
+      }
+      throw new Error(`Failed to delete archive: ${error.message}`)
+    }
   }
 }

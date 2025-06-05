@@ -5,5 +5,6 @@ import { ArchivesService } from "./archives.service"
 @Module({
   controllers: [ArchivesController],
   providers: [ArchivesService],
+  exports: [ArchivesService],
 })
 export class ArchivesModule {}

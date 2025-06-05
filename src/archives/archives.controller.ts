@@ -4,8 +4,10 @@ import {
   Delete,
   Get,
   Param,
-  Patch,
+  ParseIntPipe,
   Post,
+  UsePipes,
+  ValidationPipe,
 } from "@nestjs/common"
 import { ArchivesService } from "./archives.service"
 import { CreateArchiveDto } from "./dto/create-archive.dto"
@@ -16,6 +18,7 @@ export class ArchivesController {
   constructor(private readonly archivesService: ArchivesService) {}
 
   @Post()
+  @UsePipes(new ValidationPipe({ transform: true }))
   create(@Body() createArchiveDto: CreateArchiveDto) {
     return this.archivesService.create(createArchiveDto)
   }
@@ -26,17 +29,21 @@ export class ArchivesController {
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.archivesService.findOne(+id)
+  findOne(@Param("id", ParseIntPipe) id: number) {
+    return this.archivesService.findOne(id)
   }
 
-  @Patch(":id")
-  update(@Param("id") id: string, @Body() updateArchiveDto: UpdateArchiveDto) {
-    return this.archivesService.update(+id, updateArchiveDto)
+  @Post(":id")
+  @UsePipes(new ValidationPipe({ transform: true }))
+  update(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() updateArchiveDto: UpdateArchiveDto,
+  ) {
+    return this.archivesService.update(id, updateArchiveDto)
   }
 
   @Delete(":id")
-  remove(@Param("id") id: string) {
-    return this.archivesService.remove(+id)
+  remove(@Param("id", ParseIntPipe) id: number) {
+    return this.archivesService.remove(id)
   }
 }

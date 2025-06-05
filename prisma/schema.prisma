@@ -10,6 +10,35 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
+}
+
+enum ArchiveChapter {
+  本纪
+  世家
+  搜神
+  列传
+  游侠
+  群像
+  随园食单
+
+  @@map("ArchiveChapter")
+}
+
+model Archive {
+  id          Int             @id @default(autoincrement()) @db.UnsignedInt
+  title       String
+  author      String?
+  publisher   String?
+  date        String?
+  chapter     ArchiveChapter?
+  tag         Json?
+  remarks     String?
+  originalUrl String?         @map("original_url")
+  archiveUrl  String?         @map("archive_url")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@map("archives")
 }
