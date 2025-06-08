@@ -75,15 +75,55 @@ export class TributeService {
     }
   }
 
-  getAll() {
-    return `This is GET /tribute/all endpoint`
-  }
-
   getContent(filename: string) {
     return `This is GET /tribute/content/${filename} endpoint`
   }
 
-  extractHtml() {
-    return `This is POST /tribute/extract-html endpoint`
+  async extractHtml(file: Express.Multer.File) {
+    try {
+      const htmlContent = file.buffer.toString("utf8")
+
+      // 从 HTML 内容提取元数据
+      const metadata =
+        this.metadataExtractorService.extractMetadataFromHtml(htmlContent)
+
+      // 提取文章内容（用于分析）
+      const articleContent =
+        this.metadataExtractorService.extractArticleContent(htmlContent)
+
+      // 使用 deepseek 分析内容
+      const analysis = await this.deepSeekService.analyzeContent(
+        metadata.title || "",
+        articleContent,
+        15,
+      )
+
+      const info = {
+        ...metadata,
+        summary: analysis.summary,
+        keywords: {
+          predefined: [],
+          extracted: analysis.keywords.extracted,
+        },
+      }
+
+      return {
+        success: true,
+        data: {
+          title: info.title || undefined,
+          author: info.author || undefined,
+          publisher: info.publisher || undefined,
+          date: info.date || undefined,
+          summary: info.summary || undefined,
+          keywords: info.keywords || { predefined: [], extracted: [] },
+        },
+      }
+    } catch (error) {
+      throw new InternalServerErrorException({
+        success: false,
+        data: null,
+        message: `Failed to extract HTML: ${error.message}`,
+      })
+    }
   }
 }

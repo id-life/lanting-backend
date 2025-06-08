@@ -1,4 +1,17 @@
-import { Controller, Get, Param, Post, Query } from "@nestjs/common"
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from "@nestjs/common"
+import { FileInterceptor } from "@nestjs/platform-express"
+import { ApiBody, ApiConsumes } from "@nestjs/swagger"
+import { multerConfig } from "@/config/configuration/multer.config"
+import { TributeFileUploadDto } from "./dto/file-upload.dto"
 import { TributeService } from "./tribute.service"
 
 @Controller("tribute")
@@ -10,18 +23,23 @@ export class TributeController {
     return this.tributeService.getInfo(link)
   }
 
-  @Get("all")
-  getAll() {
-    return this.tributeService.getAll()
+  @Post("extract-html")
+  @ApiBody({ type: TributeFileUploadDto })
+  @ApiConsumes("multipart/form-data")
+  @UseInterceptors(FileInterceptor("file", multerConfig))
+  extractHtml(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException({
+        success: false,
+        message: "File is required",
+      })
+    }
+
+    return this.tributeService.extractHtml(file)
   }
 
   @Get("content/:filename")
   getContent(@Param("filename") filename: string) {
     return this.tributeService.getContent(filename)
-  }
-
-  @Post("extract-html")
-  extractHtml() {
-    return this.tributeService.extractHtml()
   }
 }
