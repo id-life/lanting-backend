@@ -22,4 +22,14 @@ export class ConfigService {
   get databaseUrl() {
     return this.nestConfigService.get("app.DATABASE_URL", { infer: true })
   }
+
+  get deepSeekApiKey() {
+    return this.nestConfigService.get("app.DEEPSEEK_API_KEY", { infer: true })
+  }
+
+  get deepSeekModelName() {
+    return this.nestConfigService.get("app.DEEPSEEK_MODEL_NAME", {
+      infer: true,
+    })
+  }
 }

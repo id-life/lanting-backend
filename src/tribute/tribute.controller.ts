@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post } from "@nestjs/common"
+import { Controller, Get, Param, Post, Query } from "@nestjs/common"
 import { TributeService } from "./tribute.service"
 
 @Controller("tribute")
@@ -6,8 +6,8 @@ export class TributeController {
   constructor(private readonly tributeService: TributeService) {}
 
   @Get("info")
-  getInfo() {
-    return this.tributeService.getInfo()
+  getInfo(@Query("link") link: string) {
+    return this.tributeService.getInfo(link)
   }
 
   @Get("all")

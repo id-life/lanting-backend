@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 export const appConfigSchema = z.object({
+  // common
   PORT: z.coerce
     .number()
     .min(1024, "Port must be >= 1024")
@@ -8,7 +9,13 @@ export const appConfigSchema = z.object({
     .refine((val) => val !== 0, "Port cannot be 0")
     .catch(8000),
   API_PREFIX: z.string().optional(),
+
+  // database
   DATABASE_URL: z.string().url().optional(),
+
+  // deepseek
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_MODEL_NAME: z.string().default("deepseek/deepseek-v3-turbo"),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>
