@@ -48,4 +48,20 @@ export class ConfigService {
   get awsS3Directory() {
     return this.nestConfigService.get("app.AWS_S3_DIRECTORY", { infer: true })
   }
+
+  get redisHost() {
+    return this.nestConfigService.get("app.REDIS_HOST", { infer: true })
+  }
+
+  get redisPort() {
+    return this.nestConfigService.get("app.REDIS_PORT", { infer: true })
+  }
+
+  get redisPassword() {
+    return this.nestConfigService.get("app.REDIS_PASSWORD", { infer: true })
+  }
+
+  get redisDb() {
+    return this.nestConfigService.get("app.REDIS_DB", { infer: true })
+  }
 }

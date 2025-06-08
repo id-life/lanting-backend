@@ -1,11 +1,14 @@
 import { Buffer } from "node:buffer"
 import { extname } from "node:path"
+import { CACHE_MANAGER } from "@nestjs/cache-manager"
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from "@nestjs/common"
+import { Cache } from "cache-manager"
 import { execa } from "execa"
 import { AwsService } from "@/common/aws/aws.service"
 import { ConfigService } from "@/config/config.service"
@@ -19,6 +22,7 @@ export class ArchivesService {
     private readonly prismaService: PrismaService,
     private readonly awsService: AwsService,
     private readonly configService: ConfigService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   private handleError(error: any, operation: string) {
@@ -135,6 +139,9 @@ export class ArchivesService {
         data: archive,
       })
 
+      // 清除归档列表缓存
+      await this.cacheManager.del("archives:all")
+
       return {
         success: true,
         data: archiveRes,
@@ -145,23 +152,46 @@ export class ArchivesService {
   }
 
   async findAll() {
+    const cacheKey = "archives:all"
+
     try {
+      // 先尝试从缓存获取
+      const cachedResult = await this.cacheManager.get(cacheKey)
+      if (cachedResult) {
+        return cachedResult
+      }
+
+      // 缓存未命中，从数据库查询
       const archives = await this.prismaService.archive.findMany({
         orderBy: { createdAt: "desc" },
       })
 
-      return {
+      const result = {
         success: true,
         count: archives.length,
         data: archives,
       }
+
+      // 缓存结果，缓存5分钟
+      await this.cacheManager.set(cacheKey, result, 5 * 60 * 1000)
+
+      return result
     } catch (error) {
       this.handleError(error, "fetch")
     }
   }
 
   async findOne(id: number) {
+    const cacheKey = `archives:${id}`
+
     try {
+      // 先尝试从缓存获取
+      const cachedResult = await this.cacheManager.get(cacheKey)
+      if (cachedResult) {
+        return cachedResult
+      }
+
+      // 缓存未命中，从数据库查询
       const archive = await this.prismaService.archive.findUnique({
         where: { id },
       })
@@ -174,10 +204,15 @@ export class ArchivesService {
         })
       }
 
-      return {
+      const result = {
         success: true,
         data: archive,
       }
+
+      // 缓存结果，缓存10分钟（单个资源缓存时间长一些）
+      await this.cacheManager.set(cacheKey, result, 10 * 60 * 1000)
+
+      return result
     } catch (error) {
       this.handleError(error, "fetch")
     }
@@ -192,6 +227,10 @@ export class ArchivesService {
         data: updateArchiveDto,
       })
 
+      // 清除相关缓存
+      await this.cacheManager.del(`archives:${id}`)
+      await this.cacheManager.del("archives:all")
+
       return {
         success: true,
         data: archive,
@@ -203,11 +242,23 @@ export class ArchivesService {
 
   async remove(id: number) {
     try {
-      await this.findOne(id)
+      const archiveResult = await this.findOne(id)
+      const archive = (archiveResult as any)?.data
 
       await this.prismaService.archive.delete({
         where: { id },
       })
+
+      // 清除相关缓存
+      await this.cacheManager.del(`archives:${id}`)
+      await this.cacheManager.del("archives:all")
+
+      // 如果有归档文件名，也清除文件内容缓存
+      if (archive?.archiveFilename) {
+        await this.cacheManager.del(
+          `archive_content:${archive.archiveFilename}`,
+        )
+      }
 
       return {
         success: true,
@@ -219,12 +270,26 @@ export class ArchivesService {
   }
 
   async getArchiveContent(archiveFilename: string) {
+    const cacheKey = `archive_content:${archiveFilename}`
+
     try {
+      // 先尝试从缓存获取
+      const cachedContent = await this.cacheManager.get(cacheKey)
+      if (cachedContent) {
+        return cachedContent
+      }
+
+      // 缓存未命中，从S3获取文件内容
       const content = await this.awsService.getFileContent(
         `${this.configService.awsS3Directory}/${archiveFilename}`,
       )
 
-      return content.toString("utf-8")
+      const result = content.toString("utf-8")
+
+      // 缓存结果，文件内容缓存30分钟（文件内容不经常变化）
+      await this.cacheManager.set(cacheKey, result, 30 * 60 * 1000)
+
+      return result
     } catch (error) {
       this.handleError(error, "fetch")
     }

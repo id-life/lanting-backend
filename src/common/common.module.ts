@@ -4,9 +4,11 @@ import { DateUtilService } from "./date-util/date-util.service"
 import { DeepSeekService } from "./deepseek/deepseek.service"
 import { MetadataExtractorService } from "./metadata-extractor/metadata-extractor.service"
 import { PrismaService } from "./prisma/prisma.service"
+import { RedisModule } from "./redis/redis.module"
 
 @Global()
 @Module({
+  imports: [RedisModule],
   providers: [
     PrismaService,
     MetadataExtractorService,
@@ -20,6 +22,7 @@ import { PrismaService } from "./prisma/prisma.service"
     DateUtilService,
     DeepSeekService,
     AwsService,
+    RedisModule,
   ],
 })
 export class CommonModule {}

@@ -22,6 +22,12 @@ export const appConfigSchema = z.object({
   AWS_S3_ACCESS_KEY: z.string().optional(),
   AWS_S3_SECRET_KEY: z.string().optional(),
   AWS_S3_DIRECTORY: z.string().default("archives"),
+
+  // redis
+  REDIS_HOST: z.string().default("localhost"),
+  REDIS_PORT: z.coerce.number().default(6379),
+  REDIS_PASSWORD: z.string().optional(),
+  REDIS_DB: z.coerce.number().default(0),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>
