@@ -10,7 +10,8 @@ export class Archive {
   tag: any | null // prisma JSON
   remarks: string | null
   originalUrl: string | null
-  archiveUrl: string | null
+  archiveFilename: string | null
+  fileType: string | null
   createdAt: Date
   updatedAt: Date
 }

@@ -44,7 +44,24 @@ export class CreateArchiveDto {
   @IsString()
   originalUrl?: string
 
-  @IsOptional()
-  @IsString()
-  archiveUrl?: string
+  // @IsOptional()
+  // @IsString()
+  // archiveFilename?: string
+
+  // @IsOptional()
+  // @IsString()
+  // fileType?: string
+}
+
+export interface ICreateArchive {
+  title: string
+  author?: string
+  publisher?: string
+  date?: string
+  chapter?: ArchiveChapter
+  tag?: string[]
+  remarks?: string
+  originalUrl?: string
+  archiveFilename?: string
+  fileType?: string
 }

@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Controller,
   Get,
-  Param,
   Post,
   Query,
   UploadedFile,
@@ -36,10 +35,5 @@ export class TributeController {
     }
 
     return this.tributeService.extractHtml(file)
-  }
-
-  @Get("content/:filename")
-  getContent(@Param("filename") filename: string) {
-    return this.tributeService.getContent(filename)
   }
 }

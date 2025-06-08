@@ -32,4 +32,20 @@ export class ConfigService {
       infer: true,
     })
   }
+
+  get awsS3Bucket() {
+    return this.nestConfigService.get("app.AWS_S3_BUCKET", { infer: true })
+  }
+
+  get awsS3AccessKey() {
+    return this.nestConfigService.get("app.AWS_S3_ACCESS_KEY", { infer: true })
+  }
+
+  get awsS3SecretKey() {
+    return this.nestConfigService.get("app.AWS_S3_SECRET_KEY", { infer: true })
+  }
+
+  get awsS3Directory() {
+    return this.nestConfigService.get("app.AWS_S3_DIRECTORY", { infer: true })
+  }
 }

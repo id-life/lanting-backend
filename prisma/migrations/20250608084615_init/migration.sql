@@ -9,7 +9,8 @@ CREATE TABLE `archives` (
     `tag` JSON NULL,
     `remarks` VARCHAR(191) NULL,
     `original_url` VARCHAR(191) NULL,
-    `archive_url` VARCHAR(191) NULL,
+    `archive_filename` VARCHAR(191) NULL,
+    `file_type` VARCHAR(191) NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 

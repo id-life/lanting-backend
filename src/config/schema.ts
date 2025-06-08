@@ -16,6 +16,12 @@ export const appConfigSchema = z.object({
   // deepseek
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_MODEL_NAME: z.string().default("deepseek/deepseek-v3-turbo"),
+
+  // aws
+  AWS_S3_BUCKET: z.string().optional(),
+  AWS_S3_ACCESS_KEY: z.string().optional(),
+  AWS_S3_SECRET_KEY: z.string().optional(),
+  AWS_S3_DIRECTORY: z.string().default("archives"),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>
