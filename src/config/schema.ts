@@ -28,6 +28,11 @@ export const appConfigSchema = z.object({
   REDIS_PORT: z.coerce.number().default(6379),
   REDIS_PASSWORD: z.string().optional(),
   REDIS_DB: z.coerce.number().default(0),
+
+  // swagger
+  SWAGGER_ENABLED: z
+    .preprocess((v) => v === "true", z.boolean())
+    .default(false),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>

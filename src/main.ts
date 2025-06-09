@@ -25,16 +25,18 @@ async function bootstrap() {
   }
   app.enableCors()
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle("Lanting API")
-    .setDescription("API documentation for Lanting")
-    .setVersion("1.0")
-    .addBearerAuth()
-    .build()
-  const document = SwaggerModule.createDocument(app, swaggerConfig, {
-    deepScanRoutes: true,
-  })
-  SwaggerModule.setup(`${configService.apiPrefix}/docs`, app, document)
+  if (configService.swaggerEnabled) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle("Lanting API")
+      .setDescription("API documentation for Lanting")
+      .setVersion("1.0")
+      .addBearerAuth()
+      .build()
+    const document = SwaggerModule.createDocument(app, swaggerConfig, {
+      deepScanRoutes: true,
+    })
+    SwaggerModule.setup("docs", app, document)
+  }
 
   await app.listen(configService.port, () => {
     // eslint-disable-next-line no-console

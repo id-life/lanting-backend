@@ -64,4 +64,8 @@ export class ConfigService {
   get redisDb() {
     return this.nestConfigService.get("app.REDIS_DB", { infer: true })
   }
+
+  get swaggerEnabled() {
+    return this.nestConfigService.get("app.SWAGGER_ENABLED", { infer: true })
+  }
 }
