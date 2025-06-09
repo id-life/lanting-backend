@@ -1,9 +1,10 @@
-import { Injectable } from "@nestjs/common"
+import { Injectable, Logger } from "@nestjs/common"
 import { Redis } from "ioredis"
 import { ConfigService } from "../../config/config.service"
 
 @Injectable()
 export class RedisService {
+  private readonly logger = new Logger(RedisService.name)
   private readonly client: Redis
 
   constructor(private readonly configService: ConfigService) {
@@ -21,11 +22,11 @@ export class RedisService {
     this.client = new Redis(redisConfig)
 
     this.client.on("connect", () => {
-      console.warn("Redis connected successfully")
+      this.logger.log("Redis connected successfully")
     })
 
     this.client.on("error", (error) => {
-      console.error("Redis connection error:", error)
+      this.logger.error("Redis connection error:", error)
     })
   }
 

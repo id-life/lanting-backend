@@ -1,7 +1,9 @@
-import { Injectable } from "@nestjs/common"
+import { Injectable, Logger } from "@nestjs/common"
 
 @Injectable()
 export class DateUtilService {
+  private readonly logger = new Logger(DateUtilService.name)
+
   /**
    * 从字符串中提取日期
    * @param text 可能包含日期的字符串
@@ -161,7 +163,7 @@ export class DateUtilService {
 
       return null
     } catch (error) {
-      console.error("Error in extractDateFromString:", error)
+      this.logger.error("Error in extractDateFromString:", error)
       return null
     }
   }

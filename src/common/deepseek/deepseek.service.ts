@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common"
+import { Injectable, Logger } from "@nestjs/common"
 import OpenAI from "openai"
 import { ConfigService } from "@/config/config.service"
 
@@ -12,6 +12,7 @@ export interface DeepSeekAnalysisResult {
 
 @Injectable()
 export class DeepSeekService {
+  private readonly logger = new Logger(DeepSeekService.name)
   private readonly client: OpenAI
   private readonly model: string
   private readonly maxTokens: number = 1000
@@ -118,7 +119,7 @@ export class DeepSeekService {
             },
           }
         } catch (e) {
-          console.error("JSON 解析失败:", e)
+          this.logger.error("JSON parse error:", e)
         }
       }
 

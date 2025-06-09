@@ -1,4 +1,4 @@
-import { ValidationPipe } from "@nestjs/common"
+import { Logger, ValidationPipe } from "@nestjs/common"
 import { NestFactory } from "@nestjs/core"
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger"
 import { AppModule } from "./app.module"
@@ -7,6 +7,7 @@ import { ConfigService } from "./config/config.service"
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
   const configService = app.get(ConfigService)
+  const logger = new Logger("Bootstrap")
 
   // 启用全局验证管道
   app.useGlobalPipes(
@@ -17,11 +18,8 @@ async function bootstrap() {
     }),
   )
 
-  let serverURL = `http://localhost:${configService.port}`
-
   if (configService.apiPrefix) {
     app.setGlobalPrefix(configService.apiPrefix)
-    serverURL += configService.apiPrefix
   }
   app.enableCors()
 
@@ -38,10 +36,19 @@ async function bootstrap() {
     SwaggerModule.setup("docs", app, document)
   }
 
-  await app.listen(configService.port, () => {
-    // eslint-disable-next-line no-console
-    console.log(`Server is running at ${serverURL}`)
-  })
+  await app.listen(configService.port)
+
+  let actualUrl = await app.getUrl()
+
+  if (configService.apiPrefix) {
+    actualUrl += configService.apiPrefix
+  }
+
+  logger.log(`Server is running at ${actualUrl}`)
+
+  if (configService.swaggerEnabled) {
+    logger.log(`Swagger is available at ${actualUrl}/docs`)
+  }
 }
 
 bootstrap()

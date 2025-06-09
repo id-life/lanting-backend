@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common"
+import { Injectable, Logger } from "@nestjs/common"
 import { JSDOM } from "jsdom"
 import { DateUtilService } from "../date-util/date-util.service"
 
@@ -15,6 +15,8 @@ export interface Tribute {
 
 @Injectable()
 export class MetadataExtractorService {
+  private readonly logger = new Logger(MetadataExtractorService.name)
+
   constructor(private readonly dateUtil: DateUtilService) {}
 
   extractMetadataFromHtml(htmlContent: string): Partial<Tribute> {
@@ -325,7 +327,7 @@ export class MetadataExtractorService {
               dateFound = true
             }
           } catch (error) {
-            console.error("Error parsing date from meta tag:", error)
+            this.logger.error("Error parsing date from meta tag:", error)
           }
         }
       }
@@ -366,7 +368,7 @@ export class MetadataExtractorService {
                 break
               }
             } catch (error) {
-              console.error("Error parsing datetime attribute:", error)
+              this.logger.error("Error parsing datetime attribute:", error)
             }
           }
 
