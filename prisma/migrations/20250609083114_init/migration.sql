@@ -5,7 +5,7 @@ CREATE TABLE `archives` (
     `author` VARCHAR(191) NULL,
     `publisher` VARCHAR(191) NULL,
     `date` VARCHAR(191) NULL,
-    `chapter` ENUM('本纪', '世家', '搜神', '列传', '游侠', '群像', '随园食单') NULL,
+    `chapter` VARCHAR(191) NOT NULL,
     `tag` JSON NULL,
     `remarks` VARCHAR(191) NULL,
     `original_url` VARCHAR(191) NULL,

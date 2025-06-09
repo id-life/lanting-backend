@@ -13,6 +13,7 @@ import { execa } from "execa"
 import { AwsService } from "@/common/aws/aws.service"
 import { ConfigService } from "@/config/config.service"
 import { PrismaService } from "../common/prisma/prisma.service"
+import { getValidChapters, isValidChapter } from "./constants/archive-chapters"
 import { CreateArchiveDto, ICreateArchive } from "./dto/create-archive.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 
@@ -24,6 +25,26 @@ export class ArchivesService {
     private readonly configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
+
+  /**
+   * 验证章节类别是否有效
+   */
+  private validateChapter(chapter?: string): void {
+    if (chapter && !isValidChapter(chapter)) {
+      throw new BadRequestException({
+        success: false,
+        data: null,
+        message: `Invalid chapter. Must be one of: ${getValidChapters().join(", ")}`,
+      })
+    }
+  }
+
+  /**
+   * 获取所有有效的章节类别
+   */
+  getAllValidChapters(): string[] {
+    return getValidChapters()
+  }
 
   private handleError(error: any, operation: string) {
     const errorResponse = {
@@ -50,18 +71,8 @@ export class ArchivesService {
   }
 
   async create(createArchiveDto: CreateArchiveDto, file?: Express.Multer.File) {
-    // try {
-    //   const archive = await this.prismaService.archive.create({
-    //     data: createArchiveDto,
-    //   })
-
-    //   return {
-    //     success: true,
-    //     data: archive,
-    //   }
-    // } catch (error) {
-    //   this.handleError(error, "create")
-    // }
+    // DTO 层已确保 chapter 不为空且为字符串，这里只需验证有效性
+    this.validateChapter(createArchiveDto.chapter)
 
     const archive: ICreateArchive = {
       ...createArchiveDto,
@@ -220,6 +231,9 @@ export class ArchivesService {
 
   async update(id: number, updateArchiveDto: UpdateArchiveDto) {
     try {
+      // 验证章节类别（更新时可选但如果提供必须有效）
+      this.validateChapter(updateArchiveDto.chapter)
+
       await this.findOne(id)
 
       const archive = await this.prismaService.archive.update({

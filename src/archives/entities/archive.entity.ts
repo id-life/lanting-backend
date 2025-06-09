@@ -1,5 +1,4 @@
 import { ApiProperty } from "@nestjs/swagger"
-import { ArchiveChapter } from "~/generated/prisma"
 
 export class Archive {
   @ApiProperty({
@@ -37,11 +36,10 @@ export class Archive {
 
   @ApiProperty({
     description: "章节类别",
-    enum: ArchiveChapter,
     nullable: true,
     example: "本纪",
   })
-  chapter: ArchiveChapter | null
+  chapter: string | null
 
   @ApiProperty({
     description: "标签列表",

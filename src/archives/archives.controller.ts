@@ -53,6 +53,24 @@ export class ArchivesController {
     return this.archivesService.findAll()
   }
 
+  @Get("chapters")
+  @ApiOperation({ summary: "获取所有有效的章节类别" })
+  @ApiResponse({
+    status: 200,
+    description: "返回所有有效的章节类别",
+    schema: {
+      type: "array",
+      items: { type: "string" },
+      example: ["本纪", "世家", "搜神", "列传", "游侠", "群像", "随园食单"],
+    },
+  })
+  getValidChapters() {
+    return {
+      success: true,
+      data: this.archivesService.getAllValidChapters(),
+    }
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "根据ID获取归档" })
   @ApiParam({ name: "id", description: "归档ID" })

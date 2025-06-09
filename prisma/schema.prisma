@@ -13,32 +13,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ArchiveChapter {
-  本纪
-  世家
-  搜神
-  列传
-  游侠
-  群像
-  随园食单
-
-  @@map("ArchiveChapter")
-}
-
 model Archive {
-  id              Int             @id @default(autoincrement()) @db.UnsignedInt
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
   title           String
   author          String?
   publisher       String?
   date            String?
-  chapter         ArchiveChapter?
+  chapter         String
   tag             Json?
   remarks         String?
-  originalUrl     String?         @map("original_url")
-  archiveFilename String?         @map("archive_filename")
-  fileType        String?         @map("file_type")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  originalUrl     String?  @map("original_url")
+  archiveFilename String?  @map("archive_filename")
+  fileType        String?  @map("file_type")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("archives")
 }

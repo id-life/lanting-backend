@@ -1,7 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger"
 import { Transform } from "class-transformer"
-import { IsArray, IsEnum, IsOptional, IsString } from "class-validator"
-import { ArchiveChapter } from "~/generated/prisma"
+import { IsArray, IsNotEmpty, IsOptional, IsString } from "class-validator"
 
 export class CreateArchiveDto {
   @ApiProperty({
@@ -40,13 +39,13 @@ export class CreateArchiveDto {
 
   @ApiProperty({
     description: "章节类别",
-    enum: ArchiveChapter,
-    required: false,
+    required: true,
     example: "本纪",
+    enum: ["本纪", "世家", "搜神", "列传", "游侠", "群像", "随园食单"],
   })
-  @IsOptional()
-  @IsEnum(ArchiveChapter)
-  chapter?: ArchiveChapter
+  @IsNotEmpty()
+  @IsString()
+  chapter: string
 
   @ApiProperty({
     description: "标签列表",
@@ -100,7 +99,7 @@ export interface ICreateArchive {
   author?: string
   publisher?: string
   date?: string
-  chapter?: ArchiveChapter
+  chapter: string
   tag?: string[]
   remarks?: string
   originalUrl?: string
