@@ -25,5 +25,6 @@ COPY --from=builder /app/pnpm-*.yaml ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
+RUN nr prisma:generate
 EXPOSE 3000
 CMD [ "npm", "run", "start:prod" ]
