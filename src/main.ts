@@ -38,13 +38,14 @@ async function bootstrap() {
 
   await app.listen(configService.port)
 
-  let actualUrl = await app.getUrl()
+  const actualUrl = await app.getUrl()
+  let apiUrl = actualUrl
 
   if (configService.apiPrefix) {
-    actualUrl += configService.apiPrefix
+    apiUrl += configService.apiPrefix
   }
 
-  logger.log(`Server is running at ${actualUrl}`)
+  logger.log(`Server is running at ${apiUrl}`)
 
   if (configService.swaggerEnabled) {
     logger.log(`Swagger is available at ${actualUrl}/docs`)
