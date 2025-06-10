@@ -15,7 +15,11 @@ RUN npm run build
 
 FROM node:22-alpine3.21
 
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl chromium
+
+# 设置 Chromium 环境变量供 single-file-cli 使用
+ENV CHROME_BIN=/usr/bin/chromium-browser
+# ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 
