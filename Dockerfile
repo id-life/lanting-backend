@@ -9,9 +9,6 @@ RUN corepack enable && \
     npm install @antfu/ni -g
 RUN nci
 
-RUN nr prisma:generate
-COPY generated ./generated  
-
 COPY . .
 
 RUN npm run build
@@ -37,7 +34,6 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/pnpm-*.yaml ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/generated ./generated
 
 EXPOSE 3000
 CMD [ "npm", "run", "start:prod" ]
