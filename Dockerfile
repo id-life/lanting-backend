@@ -15,8 +15,8 @@ RUN npm run build
 
 FROM node:22-slim
 
-# 安装 Google Chrome（与你服务器环境一致）
 RUN apt-get update && apt-get install -y \
+    openssl \
     wget \
     ca-certificates \
     && wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
