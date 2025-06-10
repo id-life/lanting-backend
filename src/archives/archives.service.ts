@@ -102,6 +102,7 @@ export class ArchivesService {
             [
               archive.originalUrl,
               "--dump-content",
+              "--browser-executable-path=/usr/bin/chromium-browser",
               "--browser-wait-until=networkidle0",
               "--browser-timeout=60000",
             ],
