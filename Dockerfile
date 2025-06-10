@@ -8,7 +8,9 @@ COPY prisma ./prisma/
 RUN corepack enable && \
     npm install @antfu/ni -g
 RUN nci
+
 RUN nr prisma:generate
+COPY generated ./generated  
 
 COPY . .
 
