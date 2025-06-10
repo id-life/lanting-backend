@@ -5,11 +5,10 @@ WORKDIR /app
 COPY package*.json pnpm-*.yaml ./
 COPY prisma ./prisma/
 
-ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
-
 RUN corepack enable && \
     npm install @antfu/ni -g
 RUN nci
+RUN nr prisma:generate
 
 COPY . .
 
@@ -36,6 +35,7 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/pnpm-*.yaml ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/generated ./prisma/generated
 
 EXPOSE 3000
 CMD [ "npm", "run", "start:prod" ]
