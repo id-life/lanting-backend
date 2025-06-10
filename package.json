@@ -23,8 +23,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "prisma:migrate": "prisma migrate",
-    "single-file": "single-file"
+    "prisma:migrate": "prisma migrate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.826.0",

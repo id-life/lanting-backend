@@ -6,6 +6,7 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from "@nestjs/common"
 import { Cache } from "cache-manager"
@@ -19,6 +20,8 @@ import { UpdateArchiveDto } from "./dto/update-archive.dto"
 
 @Injectable()
 export class ArchivesService {
+  private readonly logger = new Logger(ArchivesService.name)
+
   constructor(
     private readonly prismaService: PrismaService,
     private readonly awsService: AwsService,
@@ -94,22 +97,32 @@ export class ArchivesService {
       } else if (archive.originalUrl) {
         // use single-file-cli
         try {
-          const { stdout, stderr } = await execa("single-file", [
-            archive.originalUrl,
-            "--dump-content",
-          ])
+          const { stdout, stderr } = await execa(
+            "single-file",
+            [
+              archive.originalUrl,
+              "--dump-content",
+              "--browser-wait-until=networkidle0",
+              "--browser-timeout=60000",
+              "--browser-args=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage",
+            ],
+            {
+              timeout: 120000,
+              killSignal: "SIGTERM",
+            },
+          )
 
           if (stderr) {
-            throw new BadRequestException({
-              success: false,
-              data: null,
-              message: `Failed to fetch content from original URL: ${stderr}`,
-            })
+            throw new Error(stderr)
           }
 
           archive.fileType = "html"
           fileContent = Buffer.from(stdout, "utf-8")
-        } catch {
+        } catch (error) {
+          this.logger.error(
+            `Failed to fetch content from ${archive.originalUrl}: ${error.message}`,
+          )
+
           const simpleHtml = `
           <!DOCTYPE html>
           <html>
