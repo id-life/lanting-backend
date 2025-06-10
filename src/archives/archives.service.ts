@@ -99,13 +99,7 @@ export class ArchivesService {
         try {
           const { stdout, stderr } = await execa(
             "single-file",
-            [
-              archive.originalUrl,
-              "--dump-content",
-              "--browser-executable-path=/usr/bin/chromium-browser",
-              "--browser-wait-until=networkidle0",
-              "--browser-timeout=60000",
-            ],
+            [archive.originalUrl, "--dump-content"],
             {
               timeout: 120000,
               killSignal: "SIGTERM",
