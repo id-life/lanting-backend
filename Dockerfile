@@ -5,6 +5,8 @@ WORKDIR /app
 COPY package*.json pnpm-*.yaml ./
 COPY prisma ./prisma/
 
+ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
+
 RUN corepack enable && \
     npm install @antfu/ni -g
 RUN nci
