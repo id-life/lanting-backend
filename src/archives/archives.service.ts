@@ -104,8 +104,6 @@ export class ArchivesService {
               "--dump-content",
               "--browser-wait-until=networkidle0",
               "--browser-timeout=60000",
-              "--browser-args",
-              '["--no-sandbox","--disable-setuid-sandbox"]',
             ],
             {
               timeout: 120000,
