@@ -16,7 +16,9 @@ import { ConfigService } from "@/config/config.service"
 import { PrismaService } from "../common/prisma/prisma.service"
 import { getValidChapters, isValidChapter } from "./constants/archive-chapters"
 import { CreateArchiveDto, ICreateArchive } from "./dto/create-archive.dto"
+import { CreateCommentDto } from "./dto/create-comment.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
+import { UpdateCommentDto } from "./dto/update-comment.dto"
 
 @Injectable()
 export class ArchivesService {
@@ -28,6 +30,18 @@ export class ArchivesService {
     private readonly configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
+
+  /**
+   * 清除指定归档的所有相关缓存
+   */
+  private async clearArchiveCache(id: number): Promise<void> {
+    await Promise.all([
+      this.cacheManager.del(`archives:v3:${id}`),
+      this.cacheManager.del(`archives:v3:${id}:with-comments`),
+      this.cacheManager.del("archives:v3:all"),
+      this.cacheManager.del(`archive_comments:${id}`),
+    ])
+  }
 
   /**
    * 验证章节类别是否有效
@@ -158,7 +172,7 @@ export class ArchivesService {
       })
 
       // 清除归档列表缓存
-      await this.cacheManager.del("archives:v2:all")
+      await this.cacheManager.del("archives:v3:all")
 
       return {
         success: true,
@@ -170,7 +184,7 @@ export class ArchivesService {
   }
 
   async findAll() {
-    const cacheKey = "archives:v2:all" // 更新缓存版本以包含likes字段
+    const cacheKey = "archives:v3:all" // 更新缓存版本
 
     try {
       // 先尝试从缓存获取
@@ -199,8 +213,10 @@ export class ArchivesService {
     }
   }
 
-  async findOne(id: number) {
-    const cacheKey = `archives:v2:${id}` // 更新缓存版本以包含likes字段
+  async findOne(id: number, includeComments: boolean = false) {
+    const cacheKey = includeComments
+      ? `archives:v3:${id}:with-comments`
+      : `archives:v3:${id}` // 更新缓存版本
 
     try {
       // 先尝试从缓存获取
@@ -212,6 +228,13 @@ export class ArchivesService {
       // 缓存未命中，从数据库查询
       const archive = await this.prismaService.archive.findUnique({
         where: { id },
+        include: {
+          comments: includeComments
+            ? {
+                orderBy: { createdAt: "desc" },
+              }
+            : false,
+        },
       })
 
       if (!archive) {
@@ -224,11 +247,17 @@ export class ArchivesService {
 
       const result = {
         success: true,
-        data: archive,
+        data: includeComments
+          ? {
+              ...archive,
+              commentsCount: archive.comments?.length || 0,
+            }
+          : archive,
       }
 
-      // 缓存结果，缓存10分钟（单个资源缓存时间长一些）
-      await this.cacheManager.set(cacheKey, result, 10 * 60 * 1000)
+      // 缓存结果，包含评论的缓存时间短一些
+      const cacheTime = includeComments ? 5 * 60 * 1000 : 10 * 60 * 1000
+      await this.cacheManager.set(cacheKey, result, cacheTime)
 
       return result
     } catch (error) {
@@ -241,7 +270,7 @@ export class ArchivesService {
       // 验证章节类别（更新时可选但如果提供必须有效）
       this.validateChapter(updateArchiveDto.chapter)
 
-      await this.findOne(id)
+      await this.findOne(id, false)
 
       const archive = await this.prismaService.archive.update({
         where: { id },
@@ -249,8 +278,7 @@ export class ArchivesService {
       })
 
       // 清除相关缓存
-      await this.cacheManager.del(`archives:v2:${id}`)
-      await this.cacheManager.del("archives:v2:all")
+      await this.clearArchiveCache(id)
 
       return {
         success: true,
@@ -263,7 +291,7 @@ export class ArchivesService {
 
   async remove(id: number) {
     try {
-      const archiveResult = await this.findOne(id)
+      const archiveResult = await this.findOne(id, false)
       const archive = (archiveResult as any)?.data
 
       await this.prismaService.archive.delete({
@@ -271,8 +299,7 @@ export class ArchivesService {
       })
 
       // 清除相关缓存
-      await this.cacheManager.del(`archives:v2:${id}`)
-      await this.cacheManager.del("archives:v2:all")
+      await this.clearArchiveCache(id)
 
       // 如果有归档文件名，也清除文件内容缓存
       if (archive?.archiveFilename) {
@@ -293,7 +320,7 @@ export class ArchivesService {
   async toggleLike(id: number, liked: boolean) {
     try {
       // 验证归档是否存在
-      const archiveResult = await this.findOne(id)
+      const archiveResult = await this.findOne(id, false)
       const currentArchive = (archiveResult as any)?.data
 
       if (!currentArchive) {
@@ -339,8 +366,7 @@ export class ArchivesService {
       }
 
       // 清除相关缓存
-      await this.cacheManager.del(`archives:v2:${id}`)
-      await this.cacheManager.del("archives:v2:all")
+      await this.clearArchiveCache(id)
 
       return {
         success: true,
@@ -375,6 +401,116 @@ export class ArchivesService {
       return result
     } catch (error) {
       this.handleError(error, "fetch")
+    }
+  }
+
+  // 评论相关方法
+  async createComment(archiveId: number, createCommentDto: CreateCommentDto) {
+    try {
+      // 验证归档是否存在
+      await this.findOne(archiveId, false)
+
+      const comment = await this.prismaService.comment.create({
+        data: {
+          ...createCommentDto,
+          archiveId,
+        },
+      })
+
+      // 清除相关缓存
+      await this.clearArchiveCache(archiveId)
+
+      return {
+        success: true,
+        data: comment,
+        message: "Comment created successfully",
+      }
+    } catch (error) {
+      this.handleError(error, "create comment")
+    }
+  }
+
+  async getCommentsByArchive(archiveId: number) {
+    const cacheKey = `archive_comments:${archiveId}`
+
+    try {
+      // 验证归档是否存在
+      await this.findOne(archiveId, false)
+
+      // 先尝试从缓存获取
+      const cachedResult = await this.cacheManager.get(cacheKey)
+      if (cachedResult) {
+        return cachedResult
+      }
+
+      // 缓存未命中，从数据库查询
+      const comments = await this.prismaService.comment.findMany({
+        where: { archiveId },
+        orderBy: { createdAt: "desc" },
+      })
+
+      const result = {
+        success: true,
+        count: comments.length,
+        data: comments,
+      }
+
+      // 缓存结果，缓存3分钟
+      await this.cacheManager.set(cacheKey, result, 3 * 60 * 1000)
+
+      return result
+    } catch (error) {
+      this.handleError(error, "fetch comments")
+    }
+  }
+
+  async updateComment(
+    commentId: number,
+    updateCommentDto: UpdateCommentDto,
+    archiveId?: number,
+  ) {
+    try {
+      const comment = await this.prismaService.comment.update({
+        where: { id: commentId },
+        data: updateCommentDto,
+      })
+
+      // 清除相关缓存
+      if (archiveId) {
+        await this.clearArchiveCache(archiveId)
+      } else {
+        await this.clearArchiveCache(comment.archiveId)
+      }
+
+      return {
+        success: true,
+        data: comment,
+        message: "Comment updated successfully",
+      }
+    } catch (error) {
+      this.handleError(error, "update comment")
+    }
+  }
+
+  async deleteComment(commentId: number, archiveId?: number) {
+    try {
+      const comment = await this.prismaService.comment.delete({
+        where: { id: commentId },
+      })
+
+      // 清除相关缓存
+      if (archiveId) {
+        await this.clearArchiveCache(archiveId)
+      } else {
+        await this.clearArchiveCache(comment.archiveId)
+      }
+
+      return {
+        success: true,
+        message: "Comment deleted successfully",
+      }
+    } catch (error) {
+      this.handleError(error, "delete comment")
     }
   }
 }

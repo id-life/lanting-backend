@@ -30,5 +30,20 @@ model Archive {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  comments Comment[]
+
   @@map("archives")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  nickname  String   @db.VarChar(50)
+  content   String   @db.Text
+  archiveId Int      @map("archive_id") @db.UnsignedInt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
 }
