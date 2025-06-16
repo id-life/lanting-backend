@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `archives` ADD COLUMN `likes` INTEGER UNSIGNED NOT NULL DEFAULT 0;

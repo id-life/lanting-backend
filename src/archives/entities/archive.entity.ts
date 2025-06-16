@@ -79,6 +79,12 @@ export class Archive {
   fileType: string | null
 
   @ApiProperty({
+    description: "点赞数",
+    example: 0,
+  })
+  likes: number
+
+  @ApiProperty({
     description: "创建时间",
     example: "2025-06-08T09:35:48.917Z",
   })

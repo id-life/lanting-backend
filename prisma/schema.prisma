@@ -26,6 +26,7 @@ model Archive {
   originalUrl     String?  @map("original_url")
   archiveFilename String?  @map("archive_filename")
   fileType        String?  @map("file_type")
+  likes           Int      @default(0) @db.UnsignedInt
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 

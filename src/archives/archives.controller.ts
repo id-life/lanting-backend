@@ -24,6 +24,7 @@ import { multerConfig } from "@/config/configuration/multer.config"
 import { ArchivesService } from "./archives.service"
 import { CreateArchiveDto } from "./dto/create-archive.dto"
 import { ArchiveFileUploadDto } from "./dto/file-upload.dts"
+import { LikeArchiveDto } from "./dto/like-archive.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 import { Archive } from "./entities/archive.entity"
 
@@ -97,6 +98,36 @@ export class ArchivesController {
   @ApiResponse({ status: 200, description: "归档删除成功" })
   remove(@Param("id", ParseIntPipe) id: number) {
     return this.archivesService.remove(id)
+  }
+
+  @Post(":id/like")
+  @ApiOperation({ summary: "点赞或取消点赞归档" })
+  @ApiParam({ name: "id", description: "归档ID" })
+  @ApiBody({ type: LikeArchiveDto })
+  @ApiResponse({
+    status: 200,
+    description: "操作成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 1 },
+            likes: { type: "number", example: 1 },
+          },
+        },
+        message: { type: "string", example: "Liked successfully" },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  toggleLike(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() likeArchiveDto: LikeArchiveDto,
+  ) {
+    return this.archivesService.toggleLike(id, likeArchiveDto.liked)
   }
 
   @Get("content/:archiveFilename")

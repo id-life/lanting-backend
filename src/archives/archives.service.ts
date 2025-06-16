@@ -158,7 +158,7 @@ export class ArchivesService {
       })
 
       // 清除归档列表缓存
-      await this.cacheManager.del("archives:all")
+      await this.cacheManager.del("archives:v2:all")
 
       return {
         success: true,
@@ -170,7 +170,7 @@ export class ArchivesService {
   }
 
   async findAll() {
-    const cacheKey = "archives:all"
+    const cacheKey = "archives:v2:all" // 更新缓存版本以包含likes字段
 
     try {
       // 先尝试从缓存获取
@@ -200,7 +200,7 @@ export class ArchivesService {
   }
 
   async findOne(id: number) {
-    const cacheKey = `archives:${id}`
+    const cacheKey = `archives:v2:${id}` // 更新缓存版本以包含likes字段
 
     try {
       // 先尝试从缓存获取
@@ -249,8 +249,8 @@ export class ArchivesService {
       })
 
       // 清除相关缓存
-      await this.cacheManager.del(`archives:${id}`)
-      await this.cacheManager.del("archives:all")
+      await this.cacheManager.del(`archives:v2:${id}`)
+      await this.cacheManager.del("archives:v2:all")
 
       return {
         success: true,
@@ -271,8 +271,8 @@ export class ArchivesService {
       })
 
       // 清除相关缓存
-      await this.cacheManager.del(`archives:${id}`)
-      await this.cacheManager.del("archives:all")
+      await this.cacheManager.del(`archives:v2:${id}`)
+      await this.cacheManager.del("archives:v2:all")
 
       // 如果有归档文件名，也清除文件内容缓存
       if (archive?.archiveFilename) {
@@ -287,6 +287,68 @@ export class ArchivesService {
       }
     } catch (error) {
       this.handleError(error, "delete")
+    }
+  }
+
+  async toggleLike(id: number, liked: boolean) {
+    try {
+      // 验证归档是否存在
+      const archiveResult = await this.findOne(id)
+      const currentArchive = (archiveResult as any)?.data
+
+      if (!currentArchive) {
+        throw new NotFoundException({
+          success: false,
+          data: null,
+          message: `Archive with ID ${id} not found`,
+        })
+      }
+
+      let archive
+      let message
+
+      if (liked) {
+        // 点赞操作
+        archive = await this.prismaService.archive.update({
+          where: { id },
+          data: {
+            likes: { increment: 1 },
+          },
+          select: { id: true, likes: true },
+        })
+        message = "Liked successfully"
+      } else {
+        // 取消点赞操作
+        // 确保点赞数不会变成负数
+        if (currentArchive.likes <= 0) {
+          throw new BadRequestException({
+            success: false,
+            data: null,
+            message: "Cannot unlike an archive with zero likes",
+          })
+        }
+
+        archive = await this.prismaService.archive.update({
+          where: { id },
+          data: {
+            likes: { decrement: 1 },
+          },
+          select: { id: true, likes: true },
+        })
+        message = "Unliked successfully"
+      }
+
+      // 清除相关缓存
+      await this.cacheManager.del(`archives:v2:${id}`)
+      await this.cacheManager.del("archives:v2:all")
+
+      return {
+        success: true,
+        data: archive,
+        message,
+      }
+    } catch (error) {
+      this.handleError(error, liked ? "like" : "unlike")
     }
   }
 
