@@ -1,3 +1,4 @@
+import { HttpModule } from "@nestjs/axios"
 import { Global, Module } from "@nestjs/common"
 import { AwsService } from "./aws/aws.service"
 import { DateUtilService } from "./date-util/date-util.service"
@@ -8,7 +9,17 @@ import { RedisModule } from "./redis/redis.module"
 
 @Global()
 @Module({
-  imports: [RedisModule],
+  imports: [
+    RedisModule,
+    HttpModule.registerAsync({
+      useFactory: async () => {
+        return {
+          timeout: 60_000,
+          maxRedirects: 3,
+        }
+      },
+    }),
+  ],
   providers: [
     PrismaService,
     MetadataExtractorService,
