@@ -14,11 +14,22 @@ export class Archive {
   title: string
 
   @ApiProperty({
-    description: "作者",
-    nullable: true,
-    example: "张三",
+    description: "作者列表",
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        id: { type: "number" },
+        name: { type: "string" },
+        order: { type: "number" },
+      },
+    },
+    example: [
+      { id: 1, name: "张三", order: 1 },
+      { id: 2, name: "李四", order: 2 },
+    ],
   })
-  author: string | null
+  authors: { id: number; name: string; order: number }[]
 
   @ApiProperty({
     description: "出版方",

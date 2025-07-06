@@ -137,13 +137,13 @@ export class ArchivesService {
           <head>
             <meta charset="UTF-8">
             <title>${archive.title}</title>
-            <meta name="author" content="${archive.author}">
+            <meta name="author" content="${archive.authors?.join(" ")}">
             <meta name="date" content="${archive.date}">
           </head>
           <body>
             <h1>${archive.title}</h1>
             <p>原始链接: <a href="${archive.originalUrl}">${archive.originalUrl}</a></p>
-            <p>作者: ${archive.author}</p>
+            <p>作者: ${archive.authors?.join(" ")}</p>
             <p>出版方: ${archive.publisher}</p>
             <p>日期: ${archive.date}</p>
             <p>备注: ${archive.remarks || ""}</p>
@@ -167,9 +167,60 @@ export class ArchivesService {
         "",
       )
 
-      const archiveRes = await this.prismaService.archive.create({
-        data: archive,
-      })
+      // 使用事务创建档案和作者关系
+      const archiveRes = await this.prismaService.$transaction(
+        async (prisma) => {
+          // 创建档案
+          const newArchive = await prisma.archive.create({
+            data: {
+              title: archive.title,
+              publisher: archive.publisher,
+              date: archive.date,
+              chapter: archive.chapter,
+              tag: archive.tag,
+              remarks: archive.remarks,
+              originalUrl: archive.originalUrl,
+              archiveFilename: archive.archiveFilename,
+              fileType: archive.fileType,
+            },
+          })
+
+          // 处理作者关系
+          if (createArchiveDto.authors && createArchiveDto.authors.length > 0) {
+            for (let i = 0; i < createArchiveDto.authors.length; i++) {
+              const authorName = createArchiveDto.authors[i].trim()
+              if (authorName) {
+                // 查找或创建作者
+                const author = await prisma.author.upsert({
+                  where: { name: authorName },
+                  create: { name: authorName },
+                  update: {},
+                })
+
+                // 创建档案-作者关系
+                await prisma.archiveAuthor.create({
+                  data: {
+                    archiveId: newArchive.id,
+                    authorId: author.id,
+                    order: i + 1,
+                  },
+                })
+              }
+            }
+          }
+
+          // 返回包含作者信息的档案
+          return prisma.archive.findUnique({
+            where: { id: newArchive.id },
+            include: {
+              authors: {
+                include: { author: true },
+                orderBy: { order: "asc" },
+              },
+            },
+          })
+        },
+      )
 
       // 清除归档列表缓存
       await this.cacheManager.del("archives:v3:all")
@@ -196,6 +247,12 @@ export class ArchivesService {
       // 缓存未命中，从数据库查询
       const archives = await this.prismaService.archive.findMany({
         orderBy: { createdAt: "desc" },
+        include: {
+          authors: {
+            include: { author: true },
+            orderBy: { order: "asc" },
+          },
+        },
       })
 
       const result = {
@@ -229,6 +286,10 @@ export class ArchivesService {
       const archive = await this.prismaService.archive.findUnique({
         where: { id },
         include: {
+          authors: {
+            include: { author: true },
+            orderBy: { order: "asc" },
+          },
           comments: includeComments
             ? {
                 orderBy: { createdAt: "desc" },
@@ -272,9 +333,64 @@ export class ArchivesService {
 
       await this.findOne(id, false)
 
-      const archive = await this.prismaService.archive.update({
-        where: { id },
-        data: updateArchiveDto,
+      // 使用事务更新档案和作者关系
+      const archive = await this.prismaService.$transaction(async (prisma) => {
+        // 更新档案基本信息
+        await prisma.archive.update({
+          where: { id },
+          data: {
+            title: updateArchiveDto.title,
+            publisher: updateArchiveDto.publisher,
+            date: updateArchiveDto.date,
+            chapter: updateArchiveDto.chapter,
+            tag: updateArchiveDto.tag,
+            remarks: updateArchiveDto.remarks,
+            originalUrl: updateArchiveDto.originalUrl,
+          },
+        })
+
+        // 处理作者关系更新
+        if (updateArchiveDto.authors !== undefined) {
+          // 删除现有的作者关系
+          await prisma.archiveAuthor.deleteMany({
+            where: { archiveId: id },
+          })
+
+          // 创建新的作者关系
+          if (updateArchiveDto.authors && updateArchiveDto.authors.length > 0) {
+            for (let i = 0; i < updateArchiveDto.authors.length; i++) {
+              const authorName = updateArchiveDto.authors[i].trim()
+              if (authorName) {
+                // 查找或创建作者
+                const author = await prisma.author.upsert({
+                  where: { name: authorName },
+                  create: { name: authorName },
+                  update: {},
+                })
+
+                // 创建档案-作者关系
+                await prisma.archiveAuthor.create({
+                  data: {
+                    archiveId: id,
+                    authorId: author.id,
+                    order: i + 1,
+                  },
+                })
+              }
+            }
+          }
+        }
+
+        // 返回包含作者信息的档案
+        return prisma.archive.findUnique({
+          where: { id },
+          include: {
+            authors: {
+              include: { author: true },
+              orderBy: { order: "asc" },
+            },
+          },
+        })
       })
 
       // 清除相关缓存

@@ -98,7 +98,21 @@ export class ArchivesController {
           properties: {
             id: { type: "number", example: 123 },
             title: { type: "string", example: "示例归档标题" },
-            author: { type: "string", example: "作者名称" },
+            authors: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                  order: { type: "number" },
+                },
+              },
+              example: [
+                { id: 1, name: "司马迁", order: 1 },
+                { id: 2, name: "裴駰", order: 2 },
+              ],
+            },
             publisher: { type: "string", example: "出版社" },
             date: { type: "string", example: "2025-06-16" },
             chapter: { type: "string", example: "本纪" },

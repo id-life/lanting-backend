@@ -11,13 +11,18 @@ export class CreateArchiveDto {
   title: string
 
   @ApiProperty({
-    description: "作者",
+    description: "作者列表",
     required: false,
-    example: "张三",
+    type: "array",
+    items: {
+      type: "string",
+    },
+    example: ["张三", "李四"],
   })
   @IsOptional()
-  @IsString()
-  author?: string
+  @IsArray()
+  @IsString({ each: true })
+  authors?: string[]
 
   @ApiProperty({
     description: "出版方",
@@ -96,7 +101,7 @@ export class CreateArchiveDto {
 
 export interface ICreateArchive {
   title: string
-  author?: string
+  authors?: string[] // 更新为作者数组
   publisher?: string
   date?: string
   chapter: string
