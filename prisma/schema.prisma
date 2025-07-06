@@ -19,7 +19,6 @@ model Archive {
   title           String   @db.VarChar(500)
   date            String?
   chapter         String   @db.VarChar(50)
-  tag             Json?
   remarks         String?  @db.MediumText
   originalUrl     String?  @map("original_url")
   archiveFilename String?  @map("archive_filename")
@@ -31,6 +30,7 @@ model Archive {
   comments  Comment[]
   authors   ArchiveAuthor[]
   publisher ArchivePublisher?
+  tags      ArchiveTag[]
 
   @@map("archives")
 }
@@ -94,4 +94,28 @@ model ArchivePublisher {
   @@id([archiveId])
   @@index([publisherId])
   @@map("archive_publishers")
+}
+
+model Tag {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  name      String   @unique @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archives ArchiveTag[]
+
+  @@map("tags")
+}
+
+model ArchiveTag {
+  archiveId Int @map("archive_id") @db.UnsignedInt
+  tagId     Int @map("tag_id") @db.UnsignedInt
+
+  archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([archiveId, tagId])
+  @@index([archiveId])
+  @@index([tagId])
+  @@map("archive_tags")
 }

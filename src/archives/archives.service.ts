@@ -176,13 +176,35 @@ export class ArchivesService {
               title: archive.title,
               date: archive.date,
               chapter: archive.chapter,
-              tag: archive.tag,
               remarks: archive.remarks,
               originalUrl: archive.originalUrl,
               archiveFilename: archive.archiveFilename,
               fileType: archive.fileType,
             },
           })
+
+          // 处理标签关系
+          if (createArchiveDto.tag && createArchiveDto.tag.length > 0) {
+            for (const tagName of createArchiveDto.tag) {
+              const trimmedTagName = tagName.trim()
+              if (trimmedTagName) {
+                // 查找或创建标签
+                const tag = await prisma.tag.upsert({
+                  where: { name: trimmedTagName },
+                  create: { name: trimmedTagName },
+                  update: {},
+                })
+
+                // 创建档案-标签关系
+                await prisma.archiveTag.create({
+                  data: {
+                    archiveId: newArchive.id,
+                    tagId: tag.id,
+                  },
+                })
+              }
+            }
+          }
 
           // 处理出版方关系
           if (createArchiveDto.publisher && createArchiveDto.publisher.trim()) {
@@ -228,7 +250,7 @@ export class ArchivesService {
             }
           }
 
-          // 返回包含作者和出版方信息的档案
+          // 返回包含作者、出版方和标签信息的档案
           return prisma.archive.findUnique({
             where: { id: newArchive.id },
             include: {
@@ -238,6 +260,9 @@ export class ArchivesService {
               },
               publisher: {
                 include: { publisher: true },
+              },
+              tags: {
+                include: { tag: true },
               },
             },
           })
@@ -276,6 +301,9 @@ export class ArchivesService {
           },
           publisher: {
             include: { publisher: true },
+          },
+          tags: {
+            include: { tag: true },
           },
         },
       })
@@ -317,6 +345,9 @@ export class ArchivesService {
           },
           publisher: {
             include: { publisher: true },
+          },
+          tags: {
+            include: { tag: true },
           },
           comments: includeComments
             ? {
@@ -373,11 +404,41 @@ export class ArchivesService {
             title: updateArchiveDto.title,
             date: updateArchiveDto.date,
             chapter: updateArchiveDto.chapter,
-            tag: updateArchiveDto.tag,
             remarks: updateArchiveDto.remarks,
             originalUrl: updateArchiveDto.originalUrl,
           },
         })
+
+        // 处理标签关系更新
+        if (updateArchiveDto.tag !== undefined) {
+          // 先删除现有的标签关系
+          await prisma.archiveTag.deleteMany({
+            where: { archiveId: id },
+          })
+
+          // 如果提供了新的标签，创建新的关系
+          if (updateArchiveDto.tag && updateArchiveDto.tag.length > 0) {
+            for (const tagName of updateArchiveDto.tag) {
+              const trimmedTagName = tagName.trim()
+              if (trimmedTagName) {
+                // 查找或创建标签
+                const tag = await prisma.tag.upsert({
+                  where: { name: trimmedTagName },
+                  create: { name: trimmedTagName },
+                  update: {},
+                })
+
+                // 创建档案-标签关系
+                await prisma.archiveTag.create({
+                  data: {
+                    archiveId: id,
+                    tagId: tag.id,
+                  },
+                })
+              }
+            }
+          }
+        }
 
         // 处理出版方关系更新
         if (updateArchiveDto.publisher !== undefined) {
@@ -439,7 +500,7 @@ export class ArchivesService {
           }
         }
 
-        // 返回包含作者和出版方信息的档案
+        // 返回包含作者、出版方和标签信息的档案
         return prisma.archive.findUnique({
           where: { id },
           include: {
@@ -449,6 +510,9 @@ export class ArchivesService {
             },
             publisher: {
               include: { publisher: true },
+            },
+            tags: {
+              include: { tag: true },
             },
           },
         })
@@ -599,6 +663,11 @@ export class ArchivesService {
             name: archive.publisher.publisher.name,
           }
         : null,
+      tags:
+        archive.tags?.map((archiveTag: any) => ({
+          id: archiveTag.tag.id,
+          name: archiveTag.tag.name,
+        })) || [],
     }
   }
 

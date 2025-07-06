@@ -120,7 +120,20 @@ export class ArchivesController {
             },
             date: { type: "string", example: "2025-06-16" },
             chapter: { type: "string", example: "本纪" },
-            tag: { type: "object", example: ["标签1", "标签2"] },
+            tags: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                },
+              },
+              example: [
+                { id: 1, name: "标签1" },
+                { id: 2, name: "标签2" },
+              ],
+            },
             remarks: { type: "string", example: "备注信息" },
             originalUrl: { type: "string", example: "https://example.com" },
             archiveFilename: { type: "string", example: "archive_123.html" },

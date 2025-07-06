@@ -59,11 +59,20 @@ export class Archive {
   @ApiProperty({
     description: "标签列表",
     type: "array",
-    items: { type: "string" },
+    items: {
+      type: "object",
+      properties: {
+        id: { type: "number" },
+        name: { type: "string" },
+      },
+    },
     nullable: true,
-    example: ["标签1", "标签2"],
+    example: [
+      { id: 1, name: "标签1" },
+      { id: 2, name: "标签2" },
+    ],
   })
-  tag: any | null // prisma JSON
+  tags: { id: number; name: string }[]
 
   @ApiProperty({
     description: "备注",
