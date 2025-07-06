@@ -21,7 +21,7 @@ model Archive {
   date            String?
   chapter         String
   tag             Json?
-  remarks         String?
+  remarks         String?  @db.MediumText
   originalUrl     String?  @map("original_url")
   archiveFilename String?  @map("archive_filename")
   fileType        String?  @map("file_type")
