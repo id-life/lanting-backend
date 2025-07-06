@@ -174,7 +174,6 @@ export class ArchivesService {
           const newArchive = await prisma.archive.create({
             data: {
               title: archive.title,
-              publisher: archive.publisher,
               date: archive.date,
               chapter: archive.chapter,
               tag: archive.tag,
@@ -184,6 +183,26 @@ export class ArchivesService {
               fileType: archive.fileType,
             },
           })
+
+          // 处理出版方关系
+          if (createArchiveDto.publisher && createArchiveDto.publisher.trim()) {
+            const publisherName = createArchiveDto.publisher.trim()
+
+            // 查找或创建出版方
+            const publisher = await prisma.publisher.upsert({
+              where: { name: publisherName },
+              create: { name: publisherName },
+              update: {},
+            })
+
+            // 创建档案-出版方关系
+            await prisma.archivePublisher.create({
+              data: {
+                archiveId: newArchive.id,
+                publisherId: publisher.id,
+              },
+            })
+          }
 
           // 处理作者关系
           if (createArchiveDto.authors && createArchiveDto.authors.length > 0) {
@@ -209,13 +228,16 @@ export class ArchivesService {
             }
           }
 
-          // 返回包含作者信息的档案
+          // 返回包含作者和出版方信息的档案
           return prisma.archive.findUnique({
             where: { id: newArchive.id },
             include: {
               authors: {
                 include: { author: true },
                 orderBy: { order: "asc" },
+              },
+              publisher: {
+                include: { publisher: true },
               },
             },
           })
@@ -227,7 +249,7 @@ export class ArchivesService {
 
       return {
         success: true,
-        data: archiveRes,
+        data: this.transformArchiveData(archiveRes),
       }
     } catch (error) {
       this.handleError(error, "create")
@@ -252,13 +274,16 @@ export class ArchivesService {
             include: { author: true },
             orderBy: { order: "asc" },
           },
+          publisher: {
+            include: { publisher: true },
+          },
         },
       })
 
       const result = {
         success: true,
         count: archives.length,
-        data: archives,
+        data: archives.map((archive) => this.transformArchiveData(archive)),
       }
 
       // 缓存结果，缓存5分钟
@@ -290,6 +315,9 @@ export class ArchivesService {
             include: { author: true },
             orderBy: { order: "asc" },
           },
+          publisher: {
+            include: { publisher: true },
+          },
           comments: includeComments
             ? {
                 orderBy: { createdAt: "desc" },
@@ -306,14 +334,17 @@ export class ArchivesService {
         })
       }
 
+      const transformedArchive = this.transformArchiveData(archive)
+
       const result = {
         success: true,
         data: includeComments
           ? {
-              ...archive,
+              ...transformedArchive,
               commentsCount: archive.comments?.length || 0,
+              comments: archive.comments,
             }
-          : archive,
+          : transformedArchive,
       }
 
       // 缓存结果，包含评论的缓存时间短一些
@@ -340,7 +371,6 @@ export class ArchivesService {
           where: { id },
           data: {
             title: updateArchiveDto.title,
-            publisher: updateArchiveDto.publisher,
             date: updateArchiveDto.date,
             chapter: updateArchiveDto.chapter,
             tag: updateArchiveDto.tag,
@@ -348,6 +378,34 @@ export class ArchivesService {
             originalUrl: updateArchiveDto.originalUrl,
           },
         })
+
+        // 处理出版方关系更新
+        if (updateArchiveDto.publisher !== undefined) {
+          // 先删除现有的出版方关系
+          await prisma.archivePublisher.deleteMany({
+            where: { archiveId: id },
+          })
+
+          // 如果提供了新的出版方，创建新的关系
+          if (updateArchiveDto.publisher && updateArchiveDto.publisher.trim()) {
+            const publisherName = updateArchiveDto.publisher.trim()
+
+            // 查找或创建出版方
+            const publisher = await prisma.publisher.upsert({
+              where: { name: publisherName },
+              create: { name: publisherName },
+              update: {},
+            })
+
+            // 创建档案-出版方关系
+            await prisma.archivePublisher.create({
+              data: {
+                archiveId: id,
+                publisherId: publisher.id,
+              },
+            })
+          }
+        }
 
         // 处理作者关系更新
         if (updateArchiveDto.authors !== undefined) {
@@ -381,13 +439,16 @@ export class ArchivesService {
           }
         }
 
-        // 返回包含作者信息的档案
+        // 返回包含作者和出版方信息的档案
         return prisma.archive.findUnique({
           where: { id },
           include: {
             authors: {
               include: { author: true },
               orderBy: { order: "asc" },
+            },
+            publisher: {
+              include: { publisher: true },
             },
           },
         })
@@ -398,7 +459,7 @@ export class ArchivesService {
 
       return {
         success: true,
-        data: archive,
+        data: this.transformArchiveData(archive),
       }
     } catch (error) {
       this.handleError(error, "update")
@@ -517,6 +578,27 @@ export class ArchivesService {
       return result
     } catch (error) {
       this.handleError(error, "fetch")
+    }
+  }
+
+  /**
+   * 转换数据库查询结果为API响应格式
+   */
+  private transformArchiveData(archive: any) {
+    return {
+      ...archive,
+      authors:
+        archive.authors?.map((archiveAuthor: any) => ({
+          id: archiveAuthor.author.id,
+          name: archiveAuthor.author.name,
+          order: archiveAuthor.order,
+        })) || [],
+      publisher: archive.publisher?.publisher
+        ? {
+            id: archive.publisher.publisher.id,
+            name: archive.publisher.publisher.name,
+          }
+        : null,
     }
   }
 

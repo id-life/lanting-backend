@@ -16,10 +16,9 @@ datasource db {
 
 model Archive {
   id              Int      @id @default(autoincrement()) @db.UnsignedInt
-  title           String
-  publisher       String?
+  title           String   @db.VarChar(500)
   date            String?
-  chapter         String
+  chapter         String   @db.VarChar(50)
   tag             Json?
   remarks         String?  @db.MediumText
   originalUrl     String?  @map("original_url")
@@ -29,8 +28,9 @@ model Archive {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  comments Comment[]
-  authors  ArchiveAuthor[]
+  comments  Comment[]
+  authors   ArchiveAuthor[]
+  publisher ArchivePublisher?
 
   @@map("archives")
 }
@@ -71,4 +71,27 @@ model ArchiveAuthor {
   @@index([archiveId])
   @@index([authorId])
   @@map("archive_authors")
+}
+
+model Publisher {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  name      String   @unique @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archives ArchivePublisher[]
+
+  @@map("publishers")
+}
+
+model ArchivePublisher {
+  archiveId   Int @map("archive_id") @db.UnsignedInt
+  publisherId Int @map("publisher_id") @db.UnsignedInt
+
+  archive   Archive   @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  publisher Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+
+  @@id([archiveId])
+  @@index([publisherId])
+  @@map("archive_publishers")
 }

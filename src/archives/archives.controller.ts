@@ -113,7 +113,11 @@ export class ArchivesController {
                 { id: 2, name: "裴駰", order: 2 },
               ],
             },
-            publisher: { type: "string", example: "出版社" },
+            publisher: {
+              type: "object",
+              properties: { id: { type: "number" }, name: { type: "string" } },
+              example: { id: 1, name: "出版社" },
+            },
             date: { type: "string", example: "2025-06-16" },
             chapter: { type: "string", example: "本纪" },
             tag: { type: "object", example: ["标签1", "标签2"] },

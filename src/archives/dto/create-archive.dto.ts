@@ -89,14 +89,6 @@ export class CreateArchiveDto {
   @IsOptional()
   @IsString()
   originalUrl?: string
-
-  // @IsOptional()
-  // @IsString()
-  // archiveFilename?: string
-
-  // @IsOptional()
-  // @IsString()
-  // fileType?: string
 }
 
 export interface ICreateArchive {

@@ -33,10 +33,15 @@ export class Archive {
 
   @ApiProperty({
     description: "出版方",
+    type: "object",
+    properties: {
+      id: { type: "number" },
+      name: { type: "string" },
+    },
     nullable: true,
-    example: "某某出版社",
+    example: { id: 1, name: "某某出版社" },
   })
-  publisher: string | null
+  publisher: { id: number; name: string } | null
 
   @ApiProperty({
     description: "日期",
@@ -47,10 +52,9 @@ export class Archive {
 
   @ApiProperty({
     description: "章节类别",
-    nullable: true,
     example: "本纪",
   })
-  chapter: string | null
+  chapter: string
 
   @ApiProperty({
     description: "标签列表",
