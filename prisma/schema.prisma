@@ -45,7 +45,7 @@ model Comment {
 
   archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
 
-  @@map("comments")
+  @@map("archive_comments")
 }
 
 model Author {
