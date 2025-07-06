@@ -230,12 +230,24 @@ export class ArchivesController {
     return this.archivesService.toggleLike(id, likeArchiveDto.liked)
   }
 
-  @Get("content/:archiveFilename")
-  @ApiOperation({ summary: "获取归档内容" })
-  @ApiParam({ name: "archiveFilename", description: "归档文件名" })
-  @ApiResponse({ status: 200, description: "返回归档内容" })
-  getArchiveContent(@Param("archiveFilename") archiveFilename: string) {
-    return this.archivesService.getArchiveContent(archiveFilename)
+  @Get("content/:storageUrl")
+  @ApiOperation({
+    summary: "获取归档内容（仅支持 S3）",
+    description:
+      "通过文件名获取 S3 存储的归档内容。注意：此接口仅适用于 S3 存储的文件，对于 OSS 存储或需要通过 ArchiveOrig 记录获取完整 URL。",
+  })
+  @ApiParam({
+    name: "storageUrl",
+    description: "S3 存储的归档文件名",
+    example: "a.html",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "返回归档内容",
+    type: String,
+  })
+  getArchiveContent(@Param("storageUrl") storageUrl: string) {
+    return this.archivesService.getArchiveContent(storageUrl)
   }
 
   // 评论相关路由

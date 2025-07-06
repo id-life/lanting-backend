@@ -82,25 +82,41 @@ export class Archive {
   remarks: string | null
 
   @ApiProperty({
-    description: "原始URL",
-    nullable: true,
-    example: "https://example.com/original",
+    description: "原始文件列表",
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        id: { type: "number" },
+        originalUrl: { type: "string", nullable: true },
+        storageUrl: { type: "string" },
+        fileType: { type: "string", nullable: true },
+        storageType: { type: "string" },
+        createdAt: { type: "string" },
+        updatedAt: { type: "string" },
+      },
+    },
+    example: [
+      {
+        id: 1,
+        originalUrl: "https://example.com/original",
+        storageUrl: "file.html",
+        fileType: "html",
+        storageType: "s3",
+        createdAt: "2025-06-08T09:35:48.917Z",
+        updatedAt: "2025-06-08T09:35:48.917Z",
+      },
+    ],
   })
-  originalUrl: string | null
-
-  @ApiProperty({
-    description: "归档文件名",
-    nullable: true,
-    example: "hash.html",
-  })
-  archiveFilename: string | null
-
-  @ApiProperty({
-    description: "文件类型",
-    nullable: true,
-    example: "html",
-  })
-  fileType: string | null
+  origs: {
+    id: number
+    originalUrl: string | null
+    storageUrl: string
+    fileType: string | null
+    storageType: string
+    createdAt: Date
+    updatedAt: Date
+  }[]
 
   @ApiProperty({
     description: "点赞数",

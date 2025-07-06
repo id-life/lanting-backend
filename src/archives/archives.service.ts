@@ -162,7 +162,7 @@ export class ArchivesService {
         `${createArchiveDto.title}${Date.now()}${archive.fileType ? `.${archive.fileType}` : ""}`,
         fileContent!,
       )
-      archive.archiveFilename = archivePath.replace(
+      const storageFilename = archivePath.replace(
         `${this.configService.awsS3Directory}/`,
         "",
       )
@@ -177,9 +177,17 @@ export class ArchivesService {
               date: archive.date,
               chapter: archive.chapter,
               remarks: archive.remarks,
+            },
+          })
+
+          // 创建档案原始文件记录
+          await prisma.archiveOrig.create({
+            data: {
+              archiveId: newArchive.id,
               originalUrl: archive.originalUrl,
-              archiveFilename: archive.archiveFilename,
+              storageUrl: storageFilename,
               fileType: archive.fileType,
+              storageType: "s3",
             },
           })
 
@@ -250,7 +258,7 @@ export class ArchivesService {
             }
           }
 
-          // 返回包含作者、出版方和标签信息的档案
+          // 返回包含作者、出版方、标签和原始文件信息的档案
           return prisma.archive.findUnique({
             where: { id: newArchive.id },
             include: {
@@ -264,6 +272,7 @@ export class ArchivesService {
               tags: {
                 include: { tag: true },
               },
+              origs: true,
             },
           })
         },
@@ -305,6 +314,7 @@ export class ArchivesService {
           tags: {
             include: { tag: true },
           },
+          origs: true,
         },
       })
 
@@ -349,6 +359,7 @@ export class ArchivesService {
           tags: {
             include: { tag: true },
           },
+          origs: true,
           comments: includeComments
             ? {
                 orderBy: { createdAt: "desc" },
@@ -405,7 +416,6 @@ export class ArchivesService {
             date: updateArchiveDto.date,
             chapter: updateArchiveDto.chapter,
             remarks: updateArchiveDto.remarks,
-            originalUrl: updateArchiveDto.originalUrl,
           },
         })
 
@@ -500,7 +510,7 @@ export class ArchivesService {
           }
         }
 
-        // 返回包含作者、出版方和标签信息的档案
+        // 返回包含作者、出版方、标签和原始文件信息的档案
         return prisma.archive.findUnique({
           where: { id },
           include: {
@@ -514,6 +524,7 @@ export class ArchivesService {
             tags: {
               include: { tag: true },
             },
+            origs: true,
           },
         })
       })
@@ -542,11 +553,12 @@ export class ArchivesService {
       // 清除相关缓存
       await this.clearArchiveCache(id)
 
-      // 如果有归档文件名，也清除文件内容缓存
-      if (archive?.archiveFilename) {
-        await this.cacheManager.del(
-          `archive_content:${archive.archiveFilename}`,
+      // 清除所有相关文件内容缓存
+      if (archive?.origs && archive.origs.length > 0) {
+        const cachePromises = archive.origs.map((orig: any) =>
+          this.cacheManager.del(`archive_content:${orig.id}`),
         )
+        await Promise.all(cachePromises)
       }
 
       return {
@@ -619,6 +631,17 @@ export class ArchivesService {
     }
   }
 
+  /**
+   * 获取归档内容（仅支持 S3 存储的文件）
+   *
+   * 注意：此方法仅适用于从 S3 获取存储的文件内容，
+   * 通过文件名直接访问 S3 中的文件。
+   *
+   * 对于 OSS 存储或需要通过 ArchiveOrig 记录获取内容的 URL，
+   *
+   * @param archiveFilename - S3 存储的文件名
+   * @returns 文件内容
+   */
   async getArchiveContent(archiveFilename: string) {
     const cacheKey = `archive_content:${archiveFilename}`
 
@@ -630,6 +653,7 @@ export class ArchivesService {
       }
 
       // 缓存未命中，从S3获取文件内容
+      // 注意：此处仅支持 S3 存储，storageType 为 's3' 的文件
       const content = await this.awsService.getFileContent(
         `${this.configService.awsS3Directory}/${archiveFilename}`,
       )
@@ -667,6 +691,16 @@ export class ArchivesService {
         archive.tags?.map((archiveTag: any) => ({
           id: archiveTag.tag.id,
           name: archiveTag.tag.name,
+        })) || [],
+      origs:
+        archive.origs?.map((orig: any) => ({
+          id: orig.id,
+          originalUrl: orig.originalUrl,
+          storageUrl: orig.storageUrl,
+          fileType: orig.fileType,
+          storageType: orig.storageType,
+          createdAt: orig.createdAt,
+          updatedAt: orig.updatedAt,
         })) || [],
     }
   }
