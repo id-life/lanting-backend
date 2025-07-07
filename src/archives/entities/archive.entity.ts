@@ -21,15 +21,14 @@ export class Archive {
       properties: {
         id: { type: "number" },
         name: { type: "string" },
-        order: { type: "number" },
       },
     },
     example: [
-      { id: 1, name: "张三", order: 1 },
-      { id: 2, name: "李四", order: 2 },
+      { id: 1, name: "张三" },
+      { id: 2, name: "李四" },
     ],
   })
-  authors: { id: number; name: string; order: number }[]
+  authors: { id: number; name: string }[]
 
   @ApiProperty({
     description: "出版方",
@@ -92,8 +91,6 @@ export class Archive {
         storageUrl: { type: "string" },
         fileType: { type: "string", nullable: true },
         storageType: { type: "string" },
-        createdAt: { type: "string" },
-        updatedAt: { type: "string" },
       },
     },
     example: [
@@ -103,8 +100,6 @@ export class Archive {
         storageUrl: "file.html",
         fileType: "html",
         storageType: "s3",
-        createdAt: "2025-06-08T09:35:48.917Z",
-        updatedAt: "2025-06-08T09:35:48.917Z",
       },
     ],
   })
@@ -114,8 +109,6 @@ export class Archive {
     storageUrl: string
     fileType: string | null
     storageType: string
-    createdAt: Date
-    updatedAt: Date
   }[]
 
   @ApiProperty({
@@ -124,15 +117,6 @@ export class Archive {
   })
   likes: number
 
-  @ApiProperty({
-    description: "创建时间",
-    example: "2025-06-08T09:35:48.917Z",
-  })
-  createdAt: Date
-
-  @ApiProperty({
-    description: "更新时间",
-    example: "2025-06-08T09:35:48.917Z",
-  })
-  updatedAt: Date
+  // 注意：createdAt 和 updatedAt 字段在 API 响应中不会返回
+  // 这些字段在 transformArchiveData 方法中被排除了
 }

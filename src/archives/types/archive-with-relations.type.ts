@@ -12,6 +12,10 @@ import { Comment } from "../entities/comment.entity"
  */
 export interface ArchiveWithRelations
   extends Omit<Archive, "authors" | "publisher" | "date" | "tags" | "origs"> {
+  // Prisma 查询包含的时间字段（在 transformArchiveData 中会被排除）
+  createdAt: Date
+  updatedAt: Date
+
   // ArchiveAuthor[] with included Author
   authors?: Array<{
     author: Author

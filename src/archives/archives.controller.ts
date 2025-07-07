@@ -65,9 +65,15 @@ export class ArchivesController {
     status: 200,
     description: "返回所有有效的章节类别",
     schema: {
-      type: "array",
-      items: { type: "string" },
-      example: ["本纪", "世家", "搜神", "列传", "游侠", "群像", "随园食单"],
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: { type: "string" },
+          example: ["本纪", "世家", "搜神", "列传", "游侠", "群像", "随园食单"],
+        },
+      },
     },
   })
   getValidChapters() {
@@ -106,12 +112,11 @@ export class ArchivesController {
                 properties: {
                   id: { type: "number" },
                   name: { type: "string" },
-                  order: { type: "number" },
                 },
               },
               example: [
-                { id: 1, name: "司马迁", order: 1 },
-                { id: 2, name: "裴駰", order: 2 },
+                { id: 1, name: "司马迁" },
+                { id: 2, name: "裴駰" },
               ],
             },
             publisher: {
@@ -140,12 +145,29 @@ export class ArchivesController {
               ],
             },
             remarks: { type: "string", example: "备注信息" },
-            originalUrl: { type: "string", example: "https://example.com" },
-            archiveFilename: { type: "string", example: "archive_123.html" },
-            fileType: { type: "string", example: "html" },
+            origs: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  originalUrl: { type: "string", nullable: true },
+                  storageUrl: { type: "string" },
+                  fileType: { type: "string", nullable: true },
+                  storageType: { type: "string" },
+                },
+              },
+              example: [
+                {
+                  id: 1,
+                  originalUrl: "https://example.com/original",
+                  storageUrl: "file.html",
+                  fileType: "html",
+                  storageType: "s3",
+                },
+              ],
+            },
             likes: { type: "number", example: 5 },
-            createdAt: { type: "string", example: "2025-06-16T02:00:00.000Z" },
-            updatedAt: { type: "string", example: "2025-06-16T02:00:00.000Z" },
             commentsCount: {
               type: "number",
               example: 2,
