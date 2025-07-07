@@ -19,6 +19,7 @@ import { CreateArchiveDto, ICreateArchive } from "./dto/create-archive.dto"
 import { CreateCommentDto } from "./dto/create-comment.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 import { UpdateCommentDto } from "./dto/update-comment.dto"
+import { ArchiveWithRelations } from "./types"
 
 @Injectable()
 export class ArchivesService {
@@ -730,15 +731,23 @@ export class ArchivesService {
   /**
    * 转换数据库查询结果为API响应格式
    */
-  private transformArchiveData(archive: any) {
+  private transformArchiveData(archive: ArchiveWithRelations | null) {
+    if (!archive) {
+      return null
+    }
+
+    // 解构排除 createdAt 和 updatedAt
+    const { createdAt, updatedAt, ...archiveWithoutTimestamps } = archive
+
     return {
-      ...archive,
+      ...archiveWithoutTimestamps,
       authors:
-        archive.authors?.map((archiveAuthor: any) => ({
-          id: archiveAuthor.author.id,
-          name: archiveAuthor.author.name,
-          order: archiveAuthor.order,
-        })) || [],
+        archive.authors
+          ?.sort((a, b) => a.order - b.order)
+          ?.map((archiveAuthor) => ({
+            id: archiveAuthor.author.id,
+            name: archiveAuthor.author.name,
+          })) || [],
       publisher: archive.publisher?.publisher
         ? {
             id: archive.publisher.publisher.id,
@@ -752,19 +761,17 @@ export class ArchivesService {
           }
         : null,
       tags:
-        archive.tags?.map((archiveTag: any) => ({
+        archive.tags?.map((archiveTag) => ({
           id: archiveTag.tag.id,
           name: archiveTag.tag.name,
         })) || [],
       origs:
-        archive.origs?.map((orig: any) => ({
+        archive.origs?.map((orig) => ({
           id: orig.id,
           originalUrl: orig.originalUrl,
           storageUrl: orig.storageUrl,
           fileType: orig.fileType,
           storageType: orig.storageType,
-          createdAt: orig.createdAt,
-          updatedAt: orig.updatedAt,
         })) || [],
     }
   }
