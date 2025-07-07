@@ -46,9 +46,9 @@ export class Archive {
   @ApiProperty({
     description: "日期",
     nullable: true,
-    example: "2025-06-08",
+    example: { id: 1, value: "2025-06-08" },
   })
-  date: string | null
+  date: { id: number; value: string } | null
 
   @ApiProperty({
     description: "章节类别",

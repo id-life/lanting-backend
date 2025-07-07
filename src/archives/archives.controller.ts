@@ -118,7 +118,11 @@ export class ArchivesController {
               properties: { id: { type: "number" }, name: { type: "string" } },
               example: { id: 1, name: "出版社" },
             },
-            date: { type: "string", example: "2025-06-16" },
+            date: {
+              type: "object",
+              properties: { id: { type: "number" }, value: { type: "string" } },
+              example: { id: 1, value: "2025-06-16" },
+            },
             chapter: { type: "string", example: "本纪" },
             tags: {
               type: "array",

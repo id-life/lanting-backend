@@ -17,7 +17,6 @@ datasource db {
 model Archive {
   id        Int      @id @default(autoincrement()) @db.UnsignedInt
   title     String   @db.VarChar(500)
-  date      String?
   chapter   String   @db.VarChar(50)
   remarks   String?  @db.MediumText
   likes     Int      @default(0) @db.UnsignedInt
@@ -27,6 +26,7 @@ model Archive {
   comments  Comment[]
   authors   ArchiveAuthor[]
   publisher ArchivePublisher?
+  date      ArchiveDate?
   tags      ArchiveTag[]
   origs     ArchiveOrig[]
 
@@ -132,4 +132,27 @@ model ArchiveOrig {
 
   @@index([archiveId])
   @@map("archive_origs")
+}
+
+model Date {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  value     String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archives ArchiveDate[]
+
+  @@map("dates")
+}
+
+model ArchiveDate {
+  archiveId Int @map("archive_id") @db.UnsignedInt
+  dateId    Int @map("date_id") @db.UnsignedInt
+
+  archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  date    Date    @relation(fields: [dateId], references: [id], onDelete: Cascade)
+
+  @@id([archiveId])
+  @@index([dateId])
+  @@map("archive_dates")
 }

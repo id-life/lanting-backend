@@ -174,7 +174,6 @@ export class ArchivesService {
           const newArchive = await prisma.archive.create({
             data: {
               title: archive.title,
-              date: archive.date,
               chapter: archive.chapter,
               remarks: archive.remarks,
             },
@@ -212,6 +211,26 @@ export class ArchivesService {
                 })
               }
             }
+          }
+
+          // 处理日期关系
+          if (createArchiveDto.date && createArchiveDto.date.trim()) {
+            const dateValue = createArchiveDto.date.trim()
+
+            // 查找或创建日期
+            const date = await prisma.date.upsert({
+              where: { value: dateValue },
+              create: { value: dateValue },
+              update: {},
+            })
+
+            // 创建档案-日期关系
+            await prisma.archiveDate.create({
+              data: {
+                archiveId: newArchive.id,
+                dateId: date.id,
+              },
+            })
           }
 
           // 处理出版方关系
@@ -258,7 +277,7 @@ export class ArchivesService {
             }
           }
 
-          // 返回包含作者、出版方、标签和原始文件信息的档案
+          // 返回包含作者、出版方、日期、标签和原始文件信息的档案
           return prisma.archive.findUnique({
             where: { id: newArchive.id },
             include: {
@@ -268,6 +287,9 @@ export class ArchivesService {
               },
               publisher: {
                 include: { publisher: true },
+              },
+              date: {
+                include: { date: true },
               },
               tags: {
                 include: { tag: true },
@@ -310,6 +332,9 @@ export class ArchivesService {
           },
           publisher: {
             include: { publisher: true },
+          },
+          date: {
+            include: { date: true },
           },
           tags: {
             include: { tag: true },
@@ -355,6 +380,9 @@ export class ArchivesService {
           },
           publisher: {
             include: { publisher: true },
+          },
+          date: {
+            include: { date: true },
           },
           tags: {
             include: { tag: true },
@@ -413,7 +441,6 @@ export class ArchivesService {
           where: { id },
           data: {
             title: updateArchiveDto.title,
-            date: updateArchiveDto.date,
             chapter: updateArchiveDto.chapter,
             remarks: updateArchiveDto.remarks,
           },
@@ -447,6 +474,34 @@ export class ArchivesService {
                 })
               }
             }
+          }
+        }
+
+        // 处理日期关系更新
+        if (updateArchiveDto.date !== undefined) {
+          // 先删除现有的日期关系
+          await prisma.archiveDate.deleteMany({
+            where: { archiveId: id },
+          })
+
+          // 如果提供了新的日期，创建新的关系
+          if (updateArchiveDto.date && updateArchiveDto.date.trim()) {
+            const dateValue = updateArchiveDto.date.trim()
+
+            // 查找或创建日期
+            const date = await prisma.date.upsert({
+              where: { value: dateValue },
+              create: { value: dateValue },
+              update: {},
+            })
+
+            // 创建档案-日期关系
+            await prisma.archiveDate.create({
+              data: {
+                archiveId: id,
+                dateId: date.id,
+              },
+            })
           }
         }
 
@@ -510,7 +565,7 @@ export class ArchivesService {
           }
         }
 
-        // 返回包含作者、出版方、标签和原始文件信息的档案
+        // 返回包含作者、出版方、日期、标签和原始文件信息的档案
         return prisma.archive.findUnique({
           where: { id },
           include: {
@@ -520,6 +575,9 @@ export class ArchivesService {
             },
             publisher: {
               include: { publisher: true },
+            },
+            date: {
+              include: { date: true },
             },
             tags: {
               include: { tag: true },
@@ -685,6 +743,12 @@ export class ArchivesService {
         ? {
             id: archive.publisher.publisher.id,
             name: archive.publisher.publisher.name,
+          }
+        : null,
+      date: archive.date?.date
+        ? {
+            id: archive.date.date.id,
+            value: archive.date.date.value,
           }
         : null,
       tags:
