@@ -28,6 +28,7 @@ import { CreateArchiveDto } from "./dto/create-archive.dto"
 import { CreateCommentDto } from "./dto/create-comment.dto"
 import { ArchiveFileUploadDto } from "./dto/file-upload.dts"
 import { LikeArchiveDto } from "./dto/like-archive.dto"
+import { SearchKeywordDto } from "./dto/search-keyword.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 import { UpdateCommentDto } from "./dto/update-comment.dto"
 import { Archive } from "./entities/archive.entity"
@@ -521,5 +522,75 @@ export class ArchivesController {
   })
   deleteComment(@Param("commentId", ParseIntPipe) commentId: number) {
     return this.archivesService.deleteComment(commentId)
+  }
+
+  // 搜索关键词相关路由
+  @Post("search-keywords")
+  @ApiOperation({ summary: "记录搜索关键词" })
+  @ApiBody({
+    type: SearchKeywordDto,
+    examples: {
+      example1: {
+        summary: "记录搜索关键词",
+        value: {
+          keyword: "JavaScript",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: "搜索关键词记录成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 1 },
+            keyword: { type: "string", example: "JavaScript" },
+            searchCount: { type: "number", example: 5 },
+            createdAt: { type: "string", example: "2025-07-07T02:30:00.000Z" },
+            updatedAt: { type: "string", example: "2025-07-07T02:30:00.000Z" },
+          },
+        },
+        message: {
+          type: "string",
+          example: "Search keyword recorded successfully",
+        },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  recordSearchKeyword(@Body() searchKeywordDto: SearchKeywordDto) {
+    return this.archivesService.recordSearchKeyword(searchKeywordDto.keyword)
+  }
+
+  @Get("search-keywords")
+  @ApiOperation({ summary: "获取搜索关键词列表" })
+  @ApiResponse({
+    status: 200,
+    description: "返回搜索关键词列表",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "number", example: 1 },
+              keyword: { type: "string", example: "JavaScript" },
+              searchCount: { type: "number", example: 5 },
+            },
+          },
+        },
+      },
+    },
+  })
+  getSearchKeywords() {
+    return this.archivesService.getSearchKeywords()
   }
 }

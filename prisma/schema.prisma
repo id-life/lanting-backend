@@ -156,3 +156,14 @@ model ArchiveDate {
   @@index([dateId])
   @@map("archive_dates")
 }
+
+model SearchKeyword {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  keyword     String   @unique @db.VarChar(256)
+  searchCount Int      @default(0) @map("search_count") @db.UnsignedInt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([searchCount(sort: Desc)])
+  @@map("search_keywords")
+}

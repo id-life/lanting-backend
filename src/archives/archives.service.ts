@@ -878,4 +878,72 @@ export class ArchivesService {
       this.handleError(error, "delete comment")
     }
   }
+
+  // 搜索关键词相关方法
+  async recordSearchKeyword(keyword: string) {
+    try {
+      const trimmedKeyword = keyword.trim()
+      if (!trimmedKeyword) {
+        throw new BadRequestException({
+          success: false,
+          data: null,
+          message: "Keyword cannot be empty",
+        })
+      }
+
+      // 使用 upsert 操作，如果关键词存在则增加计数，否则创建新记录
+      const searchKeyword = await this.prismaService.searchKeyword.upsert({
+        where: { keyword: trimmedKeyword },
+        update: {
+          searchCount: { increment: 1 },
+        },
+        create: {
+          keyword: trimmedKeyword,
+          searchCount: 1,
+        },
+      })
+
+      return {
+        success: true,
+        data: searchKeyword,
+        message: "Search keyword recorded successfully",
+      }
+    } catch (error) {
+      this.handleError(error, "record search keyword")
+    }
+  }
+
+  async getSearchKeywords() {
+    const cacheKey = "search_keywords:all"
+
+    try {
+      // 尝试从缓存获取
+      const cachedResult = await this.cacheManager.get(cacheKey)
+      if (cachedResult) {
+        return cachedResult
+      }
+
+      // 获取所有搜索关键词，按 count 降序，然后按创建时间降序
+      const keywords = await this.prismaService.searchKeyword.findMany({
+        select: {
+          id: true,
+          keyword: true,
+          searchCount: true,
+        },
+        orderBy: [{ searchCount: "desc" }, { createdAt: "desc" }],
+      })
+
+      const result = {
+        success: true,
+        data: keywords,
+      }
+
+      // 缓存结果 5 分钟
+      await this.cacheManager.set(cacheKey, result, 300000)
+
+      return result
+    } catch (error) {
+      this.handleError(error, "get search keywords")
+    }
+  }
 }
