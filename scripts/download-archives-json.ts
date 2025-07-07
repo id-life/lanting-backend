@@ -15,7 +15,7 @@ export interface ArchivesJson {
       id: string
       title: string
       author: string[]
-      publisher: string[]
+      publisher: string
       date: string
       chapter: string
       tag: string[]
