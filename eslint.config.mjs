@@ -6,5 +6,5 @@ export default defineConfig({
   rules: {
     "ts/consistent-type-imports": ["error", { prefer: "no-type-imports" }],
   },
-  ignores: ["**/prisma/**"],
+  ignores: ["**/prisma/**", "**/data/**"],
 })

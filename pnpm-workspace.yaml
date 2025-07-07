@@ -4,6 +4,7 @@ onlyBuiltDependencies:
   - "@prisma/engines"
   - "@scarf/scarf"
   - "@swc/core"
+  - esbuild
   - prisma
   - simple-git-hooks
   - unrs-resolver
