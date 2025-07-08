@@ -92,6 +92,7 @@ export class TributeService {
             extracted: analysis.keywords.extracted,
           },
         },
+        message: "Tribute info retrieved successfully",
       }
 
       // 缓存结果，网页信息缓存1小时（内容相对稳定）
@@ -158,6 +159,7 @@ export class TributeService {
           summary: info.summary || undefined,
           keywords: info.keywords || { predefined: [], extracted: [] },
         },
+        message: "HTML content extracted successfully",
       }
 
       // 缓存结果，HTML分析结果缓存1小时（内容基于文件哈希，相同文件内容结果一致）

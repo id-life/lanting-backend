@@ -307,6 +307,7 @@ export class ArchivesService {
       return {
         success: true,
         data: this.transformArchiveData(archiveRes),
+        message: "Archive created successfully",
       }
     } catch (error) {
       this.handleError(error, "create")
@@ -346,8 +347,8 @@ export class ArchivesService {
 
       const result = {
         success: true,
-        count: archives.length,
         data: archives.map((archive) => this.transformArchiveData(archive)),
+        message: "Archives retrieved successfully",
       }
 
       // 缓存结果，缓存5分钟
@@ -416,6 +417,7 @@ export class ArchivesService {
               comments: archive.comments,
             }
           : transformedArchive,
+        message: "Archive retrieved successfully",
       }
 
       // 缓存结果，包含评论的缓存时间短一些
@@ -594,6 +596,7 @@ export class ArchivesService {
       return {
         success: true,
         data: this.transformArchiveData(archive),
+        message: "Archive updated successfully",
       }
     } catch (error) {
       this.handleError(error, "update")
@@ -823,8 +826,8 @@ export class ArchivesService {
 
       const result = {
         success: true,
-        count: comments.length,
         data: comments,
+        message: "Comments retrieved successfully",
       }
 
       // 缓存结果，缓存3分钟
@@ -879,6 +882,7 @@ export class ArchivesService {
 
       return {
         success: true,
+        data: null,
         message: "Comment deleted successfully",
       }
     } catch (error) {
@@ -908,6 +912,13 @@ export class ArchivesService {
           keyword: trimmedKeyword,
           searchCount: 1,
         },
+        select: {
+          id: true,
+          keyword: true,
+          searchCount: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       })
 
       return {
@@ -936,6 +947,8 @@ export class ArchivesService {
           id: true,
           keyword: true,
           searchCount: true,
+          createdAt: true,
+          updatedAt: true,
         },
         orderBy: [{ searchCount: "desc" }, { createdAt: "desc" }],
       })
@@ -943,6 +956,7 @@ export class ArchivesService {
       const result = {
         success: true,
         data: keywords,
+        message: "Search keywords retrieved successfully",
       }
 
       // 缓存结果 5 分钟

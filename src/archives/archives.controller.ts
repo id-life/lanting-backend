@@ -40,7 +40,18 @@ export class ArchivesController {
 
   @Post()
   @ApiOperation({ summary: "创建新归档" })
-  @ApiResponse({ status: 201, description: "归档创建成功", type: Archive })
+  @ApiResponse({
+    status: 201,
+    description: "归档创建成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: { $ref: "#/components/schemas/Archive" },
+        message: { type: "string", example: "Archive created successfully" },
+      },
+    },
+  })
   @ApiBody({ type: ArchiveFileUploadDto })
   @ApiConsumes("multipart/form-data")
   @UsePipes(new ValidationPipe({ transform: true }))
@@ -54,7 +65,21 @@ export class ArchivesController {
 
   @Get()
   @ApiOperation({ summary: "获取所有归档" })
-  @ApiResponse({ status: 200, description: "返回所有归档", type: [Archive] })
+  @ApiResponse({
+    status: 200,
+    description: "返回所有归档",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: { $ref: "#/components/schemas/Archive" },
+        },
+        message: { type: "string", example: "Archives retrieved successfully" },
+      },
+    },
+  })
   findAll() {
     return this.archivesService.findAll()
   }
@@ -73,6 +98,10 @@ export class ArchivesController {
           items: { type: "string" },
           example: ["本纪", "世家", "搜神", "列传", "游侠", "群像", "随园食单"],
         },
+        message: {
+          type: "string",
+          example: "Valid chapters retrieved successfully",
+        },
       },
     },
   })
@@ -80,7 +109,35 @@ export class ArchivesController {
     return {
       success: true,
       data: this.archivesService.getAllValidChapters(),
+      message: "Valid chapters retrieved successfully",
     }
+  }
+
+  @Get("search-keywords")
+  @ApiOperation({ summary: "获取搜索关键词列表" })
+  @ApiResponse({
+    status: 200,
+    description: "返回搜索关键词列表",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "number", example: 1 },
+              keyword: { type: "string", example: "JavaScript" },
+              searchCount: { type: "number", example: 5 },
+            },
+          },
+        },
+      },
+    },
+  })
+  getSearchKeywords() {
+    return this.archivesService.getSearchKeywords()
   }
 
   @Get(":id")
@@ -371,7 +428,6 @@ export class ArchivesController {
       type: "object",
       properties: {
         success: { type: "boolean", example: true },
-        count: { type: "number", example: 2 },
         data: {
           type: "array",
           items: {
@@ -526,6 +582,7 @@ export class ArchivesController {
       type: "object",
       properties: {
         success: { type: "boolean", example: true },
+        data: { type: "null", example: null },
         message: { type: "string", example: "Comment deleted successfully" },
       },
     },
@@ -587,32 +644,5 @@ export class ArchivesController {
   @UsePipes(new ValidationPipe({ transform: true }))
   recordSearchKeyword(@Body() searchKeywordDto: SearchKeywordDto) {
     return this.archivesService.recordSearchKeyword(searchKeywordDto.keyword)
-  }
-
-  @Get("search-keywords")
-  @ApiOperation({ summary: "获取搜索关键词列表" })
-  @ApiResponse({
-    status: 200,
-    description: "返回搜索关键词列表",
-    schema: {
-      type: "object",
-      properties: {
-        success: { type: "boolean", example: true },
-        data: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "number", example: 1 },
-              keyword: { type: "string", example: "JavaScript" },
-              searchCount: { type: "number", example: 5 },
-            },
-          },
-        },
-      },
-    },
-  })
-  getSearchKeywords() {
-    return this.archivesService.getSearchKeywords()
   }
 }
