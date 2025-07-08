@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
   UploadedFile,
@@ -26,12 +27,11 @@ import { multerConfig } from "@/config/configuration/multer.config"
 import { ArchivesService } from "./archives.service"
 import { CreateArchiveDto } from "./dto/create-archive.dto"
 import { CreateCommentDto } from "./dto/create-comment.dto"
-import { ArchiveFileUploadDto } from "./dto/file-upload.dts"
+import { ArchiveFileUploadDto } from "./dto/file-upload.dto"
 import { LikeArchiveDto } from "./dto/like-archive.dto"
 import { SearchKeywordDto } from "./dto/search-keyword.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 import { UpdateCommentDto } from "./dto/update-comment.dto"
-import { Archive } from "./entities/archive.entity"
 
 @ApiTags("archives")
 @Controller("archives")
@@ -49,6 +49,21 @@ export class ArchivesController {
         success: { type: "boolean", example: true },
         data: { $ref: "#/components/schemas/Archive" },
         message: { type: "string", example: "Archive created successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Either a file or an original URL must be provided",
+        },
       },
     },
   })
@@ -130,14 +145,69 @@ export class ArchivesController {
               id: { type: "number", example: 1 },
               keyword: { type: "string", example: "JavaScript" },
               searchCount: { type: "number", example: 5 },
+              createdAt: {
+                type: "string",
+                example: "2025-07-07T02:30:00.000Z",
+              },
+              updatedAt: {
+                type: "string",
+                example: "2025-07-07T02:30:00.000Z",
+              },
             },
           },
+        },
+        message: {
+          type: "string",
+          example: "Search keywords retrieved successfully",
         },
       },
     },
   })
   getSearchKeywords() {
     return this.archivesService.getSearchKeywords()
+  }
+
+  @Get("content/:storageUrl")
+  @ApiOperation({
+    summary: "获取归档内容（仅支持 S3）",
+    description:
+      "通过文件名获取 S3 存储的归档内容。注意：此接口仅适用于 S3 存储的文件，对于 OSS 存储或需要通过 ArchiveOrig 记录获取完整 URL。",
+  })
+  @ApiParam({
+    name: "storageUrl",
+    description: "S3 存储的归档文件名",
+    example: "a.html",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "返回归档内容",
+    content: {
+      "text/html": {
+        schema: {
+          type: "string",
+          example:
+            "<html><head><title>归档内容</title></head><body>...</body></html>",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "文件不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Failed to fetch archive: File not found",
+        },
+      },
+    },
+  })
+  getArchiveContent(@Param("storageUrl") storageUrl: string) {
+    return this.archivesService.getArchiveContent(storageUrl)
   }
 
   @Get(":id")
@@ -253,6 +323,19 @@ export class ArchivesController {
             },
           },
         },
+        message: { type: "string", example: "Archive retrieved successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
       },
     },
   })
@@ -264,10 +347,48 @@ export class ArchivesController {
     return this.archivesService.findOne(id, includeComments)
   }
 
-  @Post(":id")
+  @Patch(":id")
   @ApiOperation({ summary: "更新归档" })
   @ApiParam({ name: "id", description: "归档ID" })
-  @ApiResponse({ status: 200, description: "归档更新成功", type: Archive })
+  @ApiResponse({
+    status: 200,
+    description: "归档更新成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: { $ref: "#/components/schemas/Archive" },
+        message: { type: "string", example: "Archive updated successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Invalid chapter. Must be one of: ...",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
   @UsePipes(new ValidationPipe({ transform: true }))
   update(
     @Param("id", ParseIntPipe) id: number,
@@ -279,7 +400,32 @@ export class ArchivesController {
   @Delete(":id")
   @ApiOperation({ summary: "删除归档" })
   @ApiParam({ name: "id", description: "归档ID" })
-  @ApiResponse({ status: 200, description: "归档删除成功" })
+  @ApiResponse({
+    status: 200,
+    description: "归档删除成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        message: {
+          type: "string",
+          example: "Archive with ID 1 deleted successfully",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
   remove(@Param("id", ParseIntPipe) id: number) {
     return this.archivesService.remove(id)
   }
@@ -306,32 +452,39 @@ export class ArchivesController {
       },
     },
   })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Cannot unlike an archive with zero likes",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
   @UsePipes(new ValidationPipe({ transform: true }))
   toggleLike(
     @Param("id", ParseIntPipe) id: number,
     @Body() likeArchiveDto: LikeArchiveDto,
   ) {
     return this.archivesService.toggleLike(id, likeArchiveDto.liked)
-  }
-
-  @Get("content/:storageUrl")
-  @ApiOperation({
-    summary: "获取归档内容（仅支持 S3）",
-    description:
-      "通过文件名获取 S3 存储的归档内容。注意：此接口仅适用于 S3 存储的文件，对于 OSS 存储或需要通过 ArchiveOrig 记录获取完整 URL。",
-  })
-  @ApiParam({
-    name: "storageUrl",
-    description: "S3 存储的归档文件名",
-    example: "a.html",
-  })
-  @ApiResponse({
-    status: 200,
-    description: "返回归档内容",
-    type: String,
-  })
-  getArchiveContent(@Param("storageUrl") storageUrl: string) {
-    return this.archivesService.getArchiveContent(storageUrl)
   }
 
   // 评论相关路由
@@ -485,7 +638,7 @@ export class ArchivesController {
     return this.archivesService.getCommentsByArchive(id)
   }
 
-  @Post("comments/:commentId")
+  @Patch("comments/:commentId")
   @ApiOperation({ summary: "更新评论" })
   @ApiParam({ name: "commentId", description: "评论ID", example: 1 })
   @ApiBody({
@@ -637,6 +790,21 @@ export class ArchivesController {
         message: {
           type: "string",
           example: "Search keyword recorded successfully",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Keyword cannot be empty",
         },
       },
     },

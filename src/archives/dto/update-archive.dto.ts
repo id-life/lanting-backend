@@ -48,7 +48,7 @@ export class UpdateArchiveDto extends PartialType(CreateArchiveDto) {
     required: false,
     example: ["标签1", "标签2"],
   })
-  tag?: string[]
+  tags?: string[]
 
   @ApiProperty({
     description: "备注",

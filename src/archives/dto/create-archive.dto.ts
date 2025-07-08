@@ -22,6 +22,15 @@ export class CreateArchiveDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @Transform(({ value }) => {
+    if (typeof value === "string") {
+      return value
+        .split(",")
+        .map((author) => author.trim())
+        .filter((author) => author)
+    }
+    return value
+  })
   authors?: string[]
 
   @ApiProperty({
@@ -70,7 +79,7 @@ export class CreateArchiveDto {
     }
     return value
   })
-  tag?: string[]
+  tags?: string[]
 
   @ApiProperty({
     description: "备注",
@@ -97,7 +106,7 @@ export interface ICreateArchive {
   publisher?: string
   date?: string
   chapter: string
-  tag?: string[]
+  tags?: string[]
   remarks?: string
   originalUrl?: string
   archiveFilename?: string

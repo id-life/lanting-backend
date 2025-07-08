@@ -192,8 +192,8 @@ export class ArchivesService {
           })
 
           // 处理标签关系
-          if (createArchiveDto.tag && createArchiveDto.tag.length > 0) {
-            for (const tagName of createArchiveDto.tag) {
+          if (createArchiveDto.tags && createArchiveDto.tags.length > 0) {
+            for (const tagName of createArchiveDto.tags) {
               const trimmedTagName = tagName.trim()
               if (trimmedTagName) {
                 // 查找或创建标签
@@ -450,15 +450,15 @@ export class ArchivesService {
         })
 
         // 处理标签关系更新
-        if (updateArchiveDto.tag !== undefined) {
+        if (updateArchiveDto.tags !== undefined) {
           // 先删除现有的标签关系
           await prisma.archiveTag.deleteMany({
             where: { archiveId: id },
           })
 
           // 如果提供了新的标签，创建新的关系
-          if (updateArchiveDto.tag && updateArchiveDto.tag.length > 0) {
-            for (const tagName of updateArchiveDto.tag) {
+          if (updateArchiveDto.tags && updateArchiveDto.tags.length > 0) {
+            for (const tagName of updateArchiveDto.tags) {
               const trimmedTagName = tagName.trim()
               if (trimmedTagName) {
                 // 查找或创建标签
