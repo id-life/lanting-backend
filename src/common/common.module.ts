@@ -14,7 +14,7 @@ import { RedisModule } from "./redis/redis.module"
     HttpModule.registerAsync({
       useFactory: async () => {
         return {
-          timeout: 60_000,
+          timeout: 120_000,
           maxRedirects: 3,
         }
       },
