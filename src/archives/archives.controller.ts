@@ -448,7 +448,10 @@ export class ArchivesController {
             likes: { type: "number", example: 1 },
           },
         },
-        message: { type: "string", example: "Liked successfully" },
+        message: {
+          type: "string",
+          example: "Liked successfully 或 Unliked successfully",
+        },
       },
     },
   })
@@ -619,6 +622,7 @@ export class ArchivesController {
             },
           ],
         },
+        message: { type: "string", example: "Comments retrieved successfully" },
       },
     },
   })
