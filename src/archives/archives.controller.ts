@@ -638,8 +638,9 @@ export class ArchivesController {
     return this.archivesService.getCommentsByArchive(id)
   }
 
-  @Patch("comments/:commentId")
+  @Patch(":id/comments/:commentId")
   @ApiOperation({ summary: "更新评论" })
+  @ApiParam({ name: "id", description: "归档ID", example: 123 })
   @ApiParam({ name: "commentId", description: "评论ID", example: 1 })
   @ApiBody({
     type: UpdateCommentDto,
@@ -707,26 +708,35 @@ export class ArchivesController {
   })
   @ApiResponse({
     status: 404,
-    description: "评论不存在",
+    description: "评论不存在或不属于该归档",
     schema: {
       type: "object",
       properties: {
         success: { type: "boolean", example: false },
         data: { type: "null", example: null },
-        message: { type: "string", example: "Comment with ID 1 not found" },
+        message: {
+          type: "string",
+          example: "Comment with ID 1 not found in archive 123",
+        },
       },
     },
   })
   @UsePipes(new ValidationPipe({ transform: true }))
   updateComment(
+    @Param("id", ParseIntPipe) archiveId: number,
     @Param("commentId", ParseIntPipe) commentId: number,
     @Body() updateCommentDto: UpdateCommentDto,
   ) {
-    return this.archivesService.updateComment(commentId, updateCommentDto)
+    return this.archivesService.updateComment(
+      commentId,
+      updateCommentDto,
+      archiveId,
+    )
   }
 
-  @Delete("comments/:commentId")
+  @Delete(":id/comments/:commentId")
   @ApiOperation({ summary: "删除评论" })
+  @ApiParam({ name: "id", description: "归档ID", example: 123 })
   @ApiParam({ name: "commentId", description: "评论ID", example: 1 })
   @ApiResponse({
     status: 200,
@@ -742,18 +752,24 @@ export class ArchivesController {
   })
   @ApiResponse({
     status: 404,
-    description: "评论不存在",
+    description: "评论不存在或不属于该归档",
     schema: {
       type: "object",
       properties: {
         success: { type: "boolean", example: false },
         data: { type: "null", example: null },
-        message: { type: "string", example: "Comment with ID 1 not found" },
+        message: {
+          type: "string",
+          example: "Comment with ID 1 not found in archive 123",
+        },
       },
     },
   })
-  deleteComment(@Param("commentId", ParseIntPipe) commentId: number) {
-    return this.archivesService.deleteComment(commentId)
+  deleteComment(
+    @Param("id", ParseIntPipe) archiveId: number,
+    @Param("commentId", ParseIntPipe) commentId: number,
+  ) {
+    return this.archivesService.deleteComment(commentId, archiveId)
   }
 
   // 搜索关键词相关路由

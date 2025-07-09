@@ -845,17 +845,36 @@ export class ArchivesService {
     archiveId?: number,
   ) {
     try {
+      // 先验证评论是否存在
+      const existingComment = await this.prismaService.comment.findUnique({
+        where: { id: commentId },
+        include: { archive: true },
+      })
+
+      if (!existingComment) {
+        throw new NotFoundException({
+          success: false,
+          data: null,
+          message: `Comment with ID ${commentId} not found`,
+        })
+      }
+
+      // 如果提供了 archiveId，验证评论是否属于该归档
+      if (archiveId && existingComment.archiveId !== archiveId) {
+        throw new NotFoundException({
+          success: false,
+          data: null,
+          message: `Comment with ID ${commentId} not found in archive ${archiveId}`,
+        })
+      }
+
       const comment = await this.prismaService.comment.update({
         where: { id: commentId },
         data: updateCommentDto,
       })
 
       // 清除相关缓存
-      if (archiveId) {
-        await this.clearArchiveCache(archiveId)
-      } else {
-        await this.clearArchiveCache(comment.archiveId)
-      }
+      await this.clearArchiveCache(comment.archiveId)
 
       return {
         success: true,
@@ -869,16 +888,35 @@ export class ArchivesService {
 
   async deleteComment(commentId: number, archiveId?: number) {
     try {
+      // 先验证评论是否存在
+      const existingComment = await this.prismaService.comment.findUnique({
+        where: { id: commentId },
+        include: { archive: true },
+      })
+
+      if (!existingComment) {
+        throw new NotFoundException({
+          success: false,
+          data: null,
+          message: `Comment with ID ${commentId} not found`,
+        })
+      }
+
+      // 如果提供了 archiveId，验证评论是否属于该归档
+      if (archiveId && existingComment.archiveId !== archiveId) {
+        throw new NotFoundException({
+          success: false,
+          data: null,
+          message: `Comment with ID ${commentId} not found in archive ${archiveId}`,
+        })
+      }
+
       const comment = await this.prismaService.comment.delete({
         where: { id: commentId },
       })
 
       // 清除相关缓存
-      if (archiveId) {
-        await this.clearArchiveCache(archiveId)
-      } else {
-        await this.clearArchiveCache(comment.archiveId)
-      }
+      await this.clearArchiveCache(comment.archiveId)
 
       return {
         success: true,

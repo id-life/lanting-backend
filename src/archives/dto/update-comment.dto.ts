@@ -1,6 +1,6 @@
 import { PartialType } from "@nestjs/mapped-types"
 import { ApiProperty } from "@nestjs/swagger"
-import { IsOptional, IsString, MaxLength } from "class-validator"
+import { IsOptional, IsString, MaxLength, MinLength } from "class-validator"
 import { CreateCommentDto } from "./create-comment.dto"
 
 export class UpdateCommentDto extends PartialType(CreateCommentDto) {
@@ -11,6 +11,7 @@ export class UpdateCommentDto extends PartialType(CreateCommentDto) {
   })
   @IsOptional()
   @IsString()
+  @MinLength(1)
   @MaxLength(50)
   nickname?: string
 
@@ -21,6 +22,7 @@ export class UpdateCommentDto extends PartialType(CreateCommentDto) {
   })
   @IsOptional()
   @IsString()
+  @MinLength(1)
   @MaxLength(1000)
   content?: string
 }
