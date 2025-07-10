@@ -1,0 +1,881 @@
+import { Buffer } from "node:buffer"
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+  UsePipes,
+  ValidationPipe,
+} from "@nestjs/common"
+import { FileInterceptor } from "@nestjs/platform-express"
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from "@nestjs/swagger"
+import { Response } from "express"
+import { multerConfig } from "@/config/configuration/multer.config"
+import { ArchivesService } from "./archives.service"
+import { CreateArchiveDto } from "./dto/create-archive.dto"
+import { CreateCommentDto } from "./dto/create-comment.dto"
+import { ArchiveFileUploadDto } from "./dto/file-upload.dto"
+import { LikeArchiveDto } from "./dto/like-archive.dto"
+import { SearchKeywordDto } from "./dto/search-keyword.dto"
+import { UpdateArchiveDto } from "./dto/update-archive.dto"
+import { UpdateCommentDto } from "./dto/update-comment.dto"
+
+@ApiTags("archives")
+@Controller("archives")
+export class ArchivesController {
+  constructor(private readonly archivesService: ArchivesService) {}
+
+  @Post()
+  @ApiOperation({ summary: "创建新归档" })
+  @ApiResponse({
+    status: 201,
+    description: "归档创建成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: { $ref: "#/components/schemas/Archive" },
+        message: { type: "string", example: "Archive created successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Either a file or an original URL must be provided",
+        },
+      },
+    },
+  })
+  @ApiBody({ type: ArchiveFileUploadDto })
+  @ApiConsumes("multipart/form-data")
+  @UsePipes(new ValidationPipe({ transform: true }))
+  @UseInterceptors(FileInterceptor("file", multerConfig))
+  create(
+    @Body() createArchiveDto: CreateArchiveDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.archivesService.create(createArchiveDto, file)
+  }
+
+  @Get()
+  @ApiOperation({ summary: "获取所有归档" })
+  @ApiResponse({
+    status: 200,
+    description: "返回所有归档",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: { $ref: "#/components/schemas/Archive" },
+        },
+        message: { type: "string", example: "Archives retrieved successfully" },
+      },
+    },
+  })
+  findAll() {
+    return this.archivesService.findAll()
+  }
+
+  @Get("chapters")
+  @ApiOperation({ summary: "获取所有有效的章节类别" })
+  @ApiResponse({
+    status: 200,
+    description: "返回所有有效的章节类别",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: { type: "string" },
+          example: ["本纪", "世家", "搜神", "列传", "游侠", "群像", "随园食单"],
+        },
+        message: {
+          type: "string",
+          example: "Valid chapters retrieved successfully",
+        },
+      },
+    },
+  })
+  getValidChapters() {
+    return {
+      success: true,
+      data: this.archivesService.getAllValidChapters(),
+      message: "Valid chapters retrieved successfully",
+    }
+  }
+
+  @Get("search-keywords")
+  @ApiOperation({ summary: "获取搜索关键词列表" })
+  @ApiResponse({
+    status: 200,
+    description: "返回搜索关键词列表",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "number", example: 1 },
+              keyword: { type: "string", example: "JavaScript" },
+              searchCount: { type: "number", example: 5 },
+              createdAt: {
+                type: "string",
+                example: "2025-07-07T02:30:00.000Z",
+              },
+              updatedAt: {
+                type: "string",
+                example: "2025-07-07T02:30:00.000Z",
+              },
+            },
+          },
+        },
+        message: {
+          type: "string",
+          example: "Search keywords retrieved successfully",
+        },
+      },
+    },
+  })
+  getSearchKeywords() {
+    return this.archivesService.getSearchKeywords()
+  }
+
+  @Get("content/:storageUrl")
+  @ApiOperation({
+    summary: "获取归档内容（仅支持 S3）",
+    description:
+      "通过文件名获取 S3 存储的归档内容。注意：此接口仅适用于 S3 存储的文件，对于 OSS 存储或需要通过 ArchiveOrig 记录获取完整 URL。",
+  })
+  @ApiParam({
+    name: "storageUrl",
+    description: "S3 存储的归档文件名",
+    example: "a.html",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "返回归档内容",
+    content: {
+      "text/html": {
+        schema: {
+          type: "string",
+          example:
+            "<html><head><title>归档内容</title></head><body>...</body></html>",
+        },
+      },
+      "application/json": {
+        schema: {
+          type: "string",
+          example: '{"key": "value"}',
+        },
+      },
+      "text/plain": {
+        schema: {
+          type: "string",
+          example: "Plain text content",
+        },
+      },
+      "application/pdf": {
+        schema: {
+          type: "string",
+          format: "binary",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "文件不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Failed to fetch archive: File not found",
+        },
+      },
+    },
+  })
+  async getArchiveContent(
+    @Param("storageUrl") storageUrl: string,
+    @Res() res: Response,
+  ) {
+    const result = (await this.archivesService.getArchiveContent(
+      storageUrl,
+    )) as {
+      content: string | Buffer
+      mimeType: string
+      fileType: string
+      size: number
+      isTextFile: boolean
+    }
+
+    // 设置响应头
+    res.setHeader("Content-Type", result.mimeType)
+    res.setHeader("Content-Length", result.size)
+    res.setHeader("Content-Disposition", `inline; filename="${storageUrl}"`)
+
+    // 根据文件类型发送内容
+    if (result.isTextFile) {
+      res.send(result.content)
+    } else {
+      // 对于二进制文件，确保以 Buffer 形式发送
+      res.end(result.content as Buffer)
+    }
+  }
+
+  @Get(":id")
+  @ApiOperation({ summary: "根据ID获取归档" })
+  @ApiParam({ name: "id", description: "归档ID" })
+  @ApiQuery({
+    name: "include",
+    required: false,
+    description:
+      "可选包含的关联数据，设置为 'comments' 时会包含该归档的所有评论",
+    example: "comments",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "返回指定ID的归档",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 123 },
+            title: { type: "string", example: "示例归档标题" },
+            authors: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                },
+              },
+              example: [
+                { id: 1, name: "司马迁" },
+                { id: 2, name: "裴駰" },
+              ],
+            },
+            publisher: {
+              type: "object",
+              properties: { id: { type: "number" }, name: { type: "string" } },
+              example: { id: 1, name: "出版社" },
+            },
+            date: {
+              type: "object",
+              properties: { id: { type: "number" }, value: { type: "string" } },
+              example: { id: 1, value: "2025-06-16" },
+            },
+            chapter: { type: "string", example: "本纪" },
+            tags: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                },
+              },
+              example: [
+                { id: 1, name: "标签1" },
+                { id: 2, name: "标签2" },
+              ],
+            },
+            remarks: { type: "string", example: "备注信息" },
+            origs: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  originalUrl: { type: "string", nullable: true },
+                  storageUrl: { type: "string" },
+                  fileType: { type: "string", nullable: true },
+                  storageType: { type: "string" },
+                },
+              },
+              example: [
+                {
+                  id: 1,
+                  originalUrl: "https://example.com/original",
+                  storageUrl: "file.html",
+                  fileType: "html",
+                  storageType: "s3",
+                },
+              ],
+            },
+            likes: { type: "number", example: 5 },
+            commentsCount: {
+              type: "number",
+              example: 2,
+              description: "仅在 include=comments 时返回",
+            },
+            comments: {
+              type: "array",
+              description: "仅在 include=comments 时返回",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number", example: 1 },
+                  nickname: { type: "string", example: "张三" },
+                  content: { type: "string", example: "这是一个很好的归档！" },
+                  archiveId: { type: "number", example: 123 },
+                  createdAt: {
+                    type: "string",
+                    example: "2025-06-16T02:30:00.000Z",
+                  },
+                  updatedAt: {
+                    type: "string",
+                    example: "2025-06-16T02:30:00.000Z",
+                  },
+                },
+              },
+            },
+          },
+        },
+        message: { type: "string", example: "Archive retrieved successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
+  findOne(
+    @Param("id", ParseIntPipe) id: number,
+    @Query("include") include?: string,
+  ) {
+    const includeComments = include === "comments"
+    return this.archivesService.findOne(id, includeComments)
+  }
+
+  @Patch(":id")
+  @ApiOperation({ summary: "更新归档" })
+  @ApiParam({ name: "id", description: "归档ID" })
+  @ApiResponse({
+    status: 200,
+    description: "归档更新成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: { $ref: "#/components/schemas/Archive" },
+        message: { type: "string", example: "Archive updated successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Invalid chapter. Must be one of: ...",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  update(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() updateArchiveDto: UpdateArchiveDto,
+  ) {
+    return this.archivesService.update(id, updateArchiveDto)
+  }
+
+  @Delete(":id")
+  @ApiOperation({ summary: "删除归档" })
+  @ApiParam({ name: "id", description: "归档ID" })
+  @ApiResponse({
+    status: 200,
+    description: "归档删除成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        message: {
+          type: "string",
+          example: "Archive with ID 1 deleted successfully",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
+  remove(@Param("id", ParseIntPipe) id: number) {
+    return this.archivesService.remove(id)
+  }
+
+  @Post(":id/like")
+  @ApiOperation({ summary: "点赞或取消点赞归档" })
+  @ApiParam({ name: "id", description: "归档ID" })
+  @ApiBody({ type: LikeArchiveDto })
+  @ApiResponse({
+    status: 200,
+    description: "操作成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 1 },
+            likes: { type: "number", example: 1 },
+          },
+        },
+        message: {
+          type: "string",
+          example: "Liked successfully 或 Unliked successfully",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Cannot unlike an archive with zero likes",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  toggleLike(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() likeArchiveDto: LikeArchiveDto,
+  ) {
+    return this.archivesService.toggleLike(id, likeArchiveDto.liked)
+  }
+
+  // 评论相关路由
+  @Post(":id/comments")
+  @ApiOperation({ summary: "为归档添加评论" })
+  @ApiParam({ name: "id", description: "归档ID", example: 123 })
+  @ApiBody({
+    type: CreateCommentDto,
+    examples: {
+      example1: {
+        summary: "基本评论示例",
+        value: {
+          nickname: "张三",
+          content: "这是一个很好的归档！内容很有价值。",
+        },
+      },
+      example2: {
+        summary: "较长评论示例",
+        value: {
+          nickname: "技术爱好者",
+          content:
+            "感谢分享这个归档！这里面的内容对我的学习很有帮助。希望能看到更多类似的高质量内容。作者辛苦了！",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: "评论创建成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 1 },
+            nickname: { type: "string", example: "张三" },
+            content: {
+              type: "string",
+              example: "这是一个很好的归档！内容很有价值。",
+            },
+            archiveId: { type: "number", example: 123 },
+            createdAt: { type: "string", example: "2025-06-16T02:30:00.000Z" },
+            updatedAt: { type: "string", example: "2025-06-16T02:30:00.000Z" },
+          },
+        },
+        message: { type: "string", example: "Comment created successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Validation failed: nickname should not be empty",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  createComment(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() createCommentDto: CreateCommentDto,
+  ) {
+    return this.archivesService.createComment(id, createCommentDto)
+  }
+
+  @Get(":id/comments")
+  @ApiOperation({ summary: "获取归档的所有评论" })
+  @ApiParam({ name: "id", description: "归档ID", example: 123 })
+  @ApiResponse({
+    status: 200,
+    description: "返回归档的所有评论",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "number", example: 2 },
+              nickname: { type: "string", example: "李四" },
+              content: { type: "string", example: "非常有用的资料！" },
+              archiveId: { type: "number", example: 123 },
+              createdAt: {
+                type: "string",
+                example: "2025-06-16T02:35:00.000Z",
+              },
+              updatedAt: {
+                type: "string",
+                example: "2025-06-16T02:35:00.000Z",
+              },
+            },
+          },
+          example: [
+            {
+              id: 2,
+              nickname: "李四",
+              content: "非常有用的资料！",
+              archiveId: 123,
+              createdAt: "2025-06-16T02:35:00.000Z",
+              updatedAt: "2025-06-16T02:35:00.000Z",
+            },
+            {
+              id: 1,
+              nickname: "张三",
+              content: "这是一个很好的归档！",
+              archiveId: 123,
+              createdAt: "2025-06-16T02:30:00.000Z",
+              updatedAt: "2025-06-16T02:30:00.000Z",
+            },
+          ],
+        },
+        message: { type: "string", example: "Comments retrieved successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "归档不存在",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Archive with ID 123 not found" },
+      },
+    },
+  })
+  getCommentsByArchive(@Param("id", ParseIntPipe) id: number) {
+    return this.archivesService.getCommentsByArchive(id)
+  }
+
+  @Patch(":id/comments/:commentId")
+  @ApiOperation({ summary: "更新评论" })
+  @ApiParam({ name: "id", description: "归档ID", example: 123 })
+  @ApiParam({ name: "commentId", description: "评论ID", example: 1 })
+  @ApiBody({
+    type: UpdateCommentDto,
+    examples: {
+      updateNickname: {
+        summary: "只更新昵称",
+        value: {
+          nickname: "新昵称",
+        },
+      },
+      updateContent: {
+        summary: "只更新内容",
+        value: {
+          content: "更新后的评论内容",
+        },
+      },
+      updateBoth: {
+        summary: "同时更新昵称和内容",
+        value: {
+          nickname: "修改后的昵称",
+          content: "这是修改后的评论内容，更加详细和准确。",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: "评论更新成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 1 },
+            nickname: { type: "string", example: "修改后的昵称" },
+            content: {
+              type: "string",
+              example: "这是修改后的评论内容，更加详细和准确。",
+            },
+            archiveId: { type: "number", example: 123 },
+            createdAt: { type: "string", example: "2025-06-16T02:30:00.000Z" },
+            updatedAt: { type: "string", example: "2025-06-16T02:40:00.000Z" },
+          },
+        },
+        message: { type: "string", example: "Comment updated successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Validation failed: content is too long",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "评论不存在或不属于该归档",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Comment with ID 1 not found in archive 123",
+        },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  updateComment(
+    @Param("id", ParseIntPipe) archiveId: number,
+    @Param("commentId", ParseIntPipe) commentId: number,
+    @Body() updateCommentDto: UpdateCommentDto,
+  ) {
+    return this.archivesService.updateComment(
+      commentId,
+      updateCommentDto,
+      archiveId,
+    )
+  }
+
+  @Delete(":id/comments/:commentId")
+  @ApiOperation({ summary: "删除评论" })
+  @ApiParam({ name: "id", description: "归档ID", example: 123 })
+  @ApiParam({ name: "commentId", description: "评论ID", example: 1 })
+  @ApiResponse({
+    status: 200,
+    description: "评论删除成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: { type: "null", example: null },
+        message: { type: "string", example: "Comment deleted successfully" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "评论不存在或不属于该归档",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Comment with ID 1 not found in archive 123",
+        },
+      },
+    },
+  })
+  deleteComment(
+    @Param("id", ParseIntPipe) archiveId: number,
+    @Param("commentId", ParseIntPipe) commentId: number,
+  ) {
+    return this.archivesService.deleteComment(commentId, archiveId)
+  }
+
+  // 搜索关键词相关路由
+  @Post("search-keywords")
+  @ApiOperation({ summary: "记录搜索关键词" })
+  @ApiBody({
+    type: SearchKeywordDto,
+    examples: {
+      example1: {
+        summary: "记录搜索关键词",
+        value: {
+          keyword: "JavaScript",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: "搜索关键词记录成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 1 },
+            keyword: { type: "string", example: "JavaScript" },
+            searchCount: { type: "number", example: 5 },
+            createdAt: { type: "string", example: "2025-07-07T02:30:00.000Z" },
+            updatedAt: { type: "string", example: "2025-07-07T02:30:00.000Z" },
+          },
+        },
+        message: {
+          type: "string",
+          example: "Search keyword recorded successfully",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Keyword cannot be empty",
+        },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  recordSearchKeyword(@Body() searchKeywordDto: SearchKeywordDto) {
+    return this.archivesService.recordSearchKeyword(searchKeywordDto.keyword)
+  }
+}

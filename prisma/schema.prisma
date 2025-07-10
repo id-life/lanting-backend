@@ -1,0 +1,169 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Archive {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  title     String   @db.VarChar(500)
+  chapter   String   @db.VarChar(50)
+  remarks   String?  @db.MediumText
+  likes     Int      @default(0) @db.UnsignedInt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  comments  Comment[]
+  authors   ArchiveAuthor[]
+  publisher ArchivePublisher?
+  date      ArchiveDate?
+  tags      ArchiveTag[]
+  origs     ArchiveOrig[]
+
+  @@map("archives")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  nickname  String   @db.VarChar(50)
+  content   String   @db.Text
+  archiveId Int      @map("archive_id") @db.UnsignedInt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+
+  @@map("archive_comments")
+}
+
+model Author {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archives ArchiveAuthor[]
+
+  @@map("authors")
+}
+
+model ArchiveAuthor {
+  archiveId Int @map("archive_id") @db.UnsignedInt
+  authorId  Int @map("author_id") @db.UnsignedInt
+  order     Int @db.UnsignedTinyInt
+
+  archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  author  Author  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@id([archiveId, authorId])
+  @@index([archiveId])
+  @@index([authorId])
+  @@map("archive_authors")
+}
+
+model Publisher {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  name      String   @unique @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archives ArchivePublisher[]
+
+  @@map("publishers")
+}
+
+model ArchivePublisher {
+  archiveId   Int @map("archive_id") @db.UnsignedInt
+  publisherId Int @map("publisher_id") @db.UnsignedInt
+
+  archive   Archive   @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  publisher Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+
+  @@id([archiveId])
+  @@index([publisherId])
+  @@map("archive_publishers")
+}
+
+model Tag {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  name      String   @unique @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archives ArchiveTag[]
+
+  @@map("tags")
+}
+
+model ArchiveTag {
+  archiveId Int @map("archive_id") @db.UnsignedInt
+  tagId     Int @map("tag_id") @db.UnsignedInt
+
+  archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([archiveId, tagId])
+  @@index([archiveId])
+  @@index([tagId])
+  @@map("archive_tags")
+}
+
+model ArchiveOrig {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  archiveId   Int      @map("archive_id") @db.UnsignedInt
+  originalUrl String?  @map("original_url") @db.VarChar(500)
+  storageUrl  String   @map("storage_url") @db.VarChar(500) // 存储路径：S3文件名或完整URL
+  fileType    String?  @map("file_type") @db.VarChar(20)
+  storageType String   @default("s3") @map("storage_type") @db.VarChar(10) // s3: 文件名, oss: 完整URL
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+
+  @@index([archiveId])
+  @@map("archive_origs")
+}
+
+model Date {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  value     String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archives ArchiveDate[]
+
+  @@map("dates")
+}
+
+model ArchiveDate {
+  archiveId Int @map("archive_id") @db.UnsignedInt
+  dateId    Int @map("date_id") @db.UnsignedInt
+
+  archive Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  date    Date    @relation(fields: [dateId], references: [id], onDelete: Cascade)
+
+  @@id([archiveId])
+  @@index([dateId])
+  @@map("archive_dates")
+}
+
+model SearchKeyword {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  keyword     String   @unique @db.VarChar(256)
+  searchCount Int      @default(0) @map("search_count") @db.UnsignedInt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([searchCount(sort: Desc)])
+  @@map("search_keywords")
+}

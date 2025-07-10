@@ -1,39 +1,63 @@
+# compiled output
+/dist
+/node_modules
+/build
+
 # Logs
 logs
 *.log
 npm-debug.log*
+pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
-# Dependency directories
-node_modules/
+# yarn
+yarn.lock
 
-# TypeScript cache
-*.tsbuildinfo
+# OS
+.DS_Store
 
-# Optional npm cache directory
-.npm
+# Tests
+/coverage
+/.nyc_output
 
-# Optional eslint cache
-.eslintcache
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
-# Build output
-dist/
-build/
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
-# Environment variables
-# .env
-.env.local
+# dotenv environment variable files
+.env
 .env.development.local
 .env.test.local
 .env.production.local
+.env.local
+.env.dev
+.env.production
 
-# IDE files
-.idea/
-.vscode/
-*.swp
-*.swo
+# temp directory
+.temp
+.tmp
 
-# OS files
-.DS_Store
-Thumbs.db
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+/generated
