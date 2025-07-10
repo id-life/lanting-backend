@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer"
 import {
   Body,
   Controller,
@@ -8,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
   UsePipes,
@@ -23,6 +25,7 @@ import {
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger"
+import { Response } from "express"
 import { multerConfig } from "@/config/configuration/multer.config"
 import { ArchivesService } from "./archives.service"
 import { CreateArchiveDto } from "./dto/create-archive.dto"
@@ -189,6 +192,24 @@ export class ArchivesController {
             "<html><head><title>归档内容</title></head><body>...</body></html>",
         },
       },
+      "application/json": {
+        schema: {
+          type: "string",
+          example: '{"key": "value"}',
+        },
+      },
+      "text/plain": {
+        schema: {
+          type: "string",
+          example: "Plain text content",
+        },
+      },
+      "application/pdf": {
+        schema: {
+          type: "string",
+          format: "binary",
+        },
+      },
     },
   })
   @ApiResponse({
@@ -206,8 +227,32 @@ export class ArchivesController {
       },
     },
   })
-  getArchiveContent(@Param("storageUrl") storageUrl: string) {
-    return this.archivesService.getArchiveContent(storageUrl)
+  async getArchiveContent(
+    @Param("storageUrl") storageUrl: string,
+    @Res() res: Response,
+  ) {
+    const result = (await this.archivesService.getArchiveContent(
+      storageUrl,
+    )) as {
+      content: string | Buffer
+      mimeType: string
+      fileType: string
+      size: number
+      isTextFile: boolean
+    }
+
+    // 设置响应头
+    res.setHeader("Content-Type", result.mimeType)
+    res.setHeader("Content-Length", result.size)
+    res.setHeader("Content-Disposition", `inline; filename="${storageUrl}"`)
+
+    // 根据文件类型发送内容
+    if (result.isTextFile) {
+      res.send(result.content)
+    } else {
+      // 对于二进制文件，确保以 Buffer 形式发送
+      res.end(result.content as Buffer)
+    }
   }
 
   @Get(":id")

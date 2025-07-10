@@ -11,6 +11,7 @@ import {
 } from "@nestjs/common"
 import { Cache } from "cache-manager"
 import { execa } from "execa"
+import { lookup } from "mime-types"
 import { AwsService } from "@/common/aws/aws.service"
 import { ConfigService } from "@/config/config.service"
 import { PrismaService } from "../common/prisma/prisma.service"
@@ -702,7 +703,7 @@ export class ArchivesService {
    * 对于 OSS 存储或需要通过 ArchiveOrig 记录获取内容的 URL，
    *
    * @param archiveFilename - S3 存储的文件名
-   * @returns 文件内容
+   * @returns 包含文件内容、MIME类型和文件类型的对象
    */
   async getArchiveContent(archiveFilename: string) {
     const cacheKey = `archive_content:${archiveFilename}`
@@ -711,7 +712,12 @@ export class ArchivesService {
       // 先尝试从缓存获取
       const cachedContent = await this.cacheManager.get(cacheKey)
       if (cachedContent) {
-        return cachedContent
+        const cached = cachedContent as any
+        // 如果是二进制文件的缓存，需要重新创建Buffer
+        if (cached.isTextFile === false && typeof cached.content === "string") {
+          cached.content = Buffer.from(cached.content, "base64")
+        }
+        return cached
       }
 
       // 缓存未命中，从S3获取文件内容
@@ -720,10 +726,39 @@ export class ArchivesService {
         `${this.configService.awsS3Directory}/${archiveFilename}`,
       )
 
-      const result = content.toString("utf-8")
+      // 从文件名提取文件扩展名
+      const fileExtension = extname(archiveFilename).toLowerCase().substring(1)
+
+      // 使用 mime-types 库获取 MIME 类型
+      const mimeType = lookup(archiveFilename) || "application/octet-stream"
+
+      // 判断是否为文本文件，只有文本文件才转换为字符串
+      const isTextFile =
+        mimeType.startsWith("text/") ||
+        mimeType === "application/json" ||
+        mimeType === "application/xml" ||
+        mimeType === "application/javascript" ||
+        mimeType === "application/typescript" ||
+        mimeType.includes("xml") || // 添加其他XML类型
+        mimeType === "application/x-javascript" ||
+        mimeType === "application/ecmascript"
+
+      const result = {
+        content: isTextFile ? content.toString("utf-8") : content,
+        mimeType,
+        fileType: fileExtension,
+        size: content.length,
+        isTextFile,
+      }
+
+      // 缓存结果，对于二进制文件，将Buffer转换为base64字符串以便缓存
+      const cacheData = {
+        ...result,
+        content: isTextFile ? result.content : content.toString("base64"),
+      }
 
       // 缓存结果，文件内容缓存30分钟（文件内容不经常变化）
-      await this.cacheManager.set(cacheKey, result, 30 * 60 * 1000)
+      await this.cacheManager.set(cacheKey, cacheData, 30 * 60 * 1000)
 
       return result
     } catch (error) {
