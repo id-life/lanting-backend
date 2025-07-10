@@ -6,7 +6,7 @@ name: node js build
 on:
   push:
     branches:
-      - refactor
+      - main
 
 jobs:
   build:
