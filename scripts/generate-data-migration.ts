@@ -285,38 +285,23 @@ WHERE @proceed = 1;
 
 function updateMigrationFile() {
   try {
-    const migrationDir = path.join(__dirname, "../prisma/migrations")
-    const dataMigrationDir = fs
-      .readdirSync(migrationDir)
-      .filter((dir) => dir.includes("data_migration"))
-      .sort()
-      .pop()
+    // 生成 SQL 文件到 scripts/sql 目录
+    const sqlFile = path.join(__dirname, "sql/data_migration.sql")
 
-    if (!dataMigrationDir) {
-      throw new Error(
-        "No data migration directory found. Please create one with: npx prisma migrate dev --name data_migration --create-only",
-      )
-    }
-
-    const migrationFile = path.join(
-      migrationDir,
-      dataMigrationDir,
-      "migration.sql",
-    )
-
-    if (!fs.existsSync(migrationFile)) {
-      throw new Error(`Migration file not found: ${migrationFile}`)
+    // 确保目录存在
+    const sqlDir = path.dirname(sqlFile)
+    if (!fs.existsSync(sqlDir)) {
+      fs.mkdirSync(sqlDir, { recursive: true })
     }
 
     const sql = generateDataMigrationSQL()
 
-    // 替换空迁移文件内容
-    fs.writeFileSync(migrationFile, sql)
+    // 写入 SQL 文件
+    fs.writeFileSync(sqlFile, sql)
 
-    console.log(`Migration SQL written to: ${migrationFile}`)
-    console.log(
-      "Migration is ready to be applied with: npx prisma migrate deploy",
-    )
+    console.log(`Migration SQL written to: ${sqlFile}`)
+    console.log("You can now execute it with:")
+    console.log("  npm run execute-data-migration")
   } catch (error) {
     console.error("Failed to update migration file:", error)
     throw error

@@ -6,6 +6,11 @@ import dotenv from "dotenv"
 
 dotenv.config()
 
+/**
+ * lanting.wiki 域名绑定到了新的 lanting 前端
+ * 原本 api 的 URL 已经不再能使用，这个链接已经拿不到原本的 search keywords 数据了
+ * 2025-7-14
+ */
 const SEARCH_KEYWORD_API_URL = process.env.SEARCH_KEYWORD_API_URL
 
 export interface SearchKeywords {

@@ -26,7 +26,8 @@
     "prisma:migrate": "prisma migrate",
     "download-archives-json": "tsx scripts/download-archives-json.ts",
     "download-search-keywords": "tsx scripts/download-search-keywords.ts",
-    "data-migration": "tsx scripts/data-migration.ts"
+    "generate-data-migration": "tsx scripts/generate-data-migration.ts",
+    "execute-data-migration": "prisma db execute --file scripts/sql/data_migration.sql --schema prisma/schema.prisma"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.826.0",
