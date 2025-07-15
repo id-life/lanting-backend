@@ -6,7 +6,7 @@ name: main deployment
 on:
   push:
     branches:
-      - bio
+      - main
 
 jobs:
   build:
