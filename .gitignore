@@ -40,7 +40,7 @@ yarn.lock
 
 # dotenv environment variable files
 .env*
-!.env.example
+!.env*.example
 
 # temp directory
 .temp
