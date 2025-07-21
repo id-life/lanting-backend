@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -25,7 +26,8 @@ import {
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger"
-import { Response } from "express"
+import { Request, Response } from "express"
+import { ConfigService } from "@/config/config.service"
 import { multerConfig } from "@/config/configuration/multer.config"
 import { ArchivesService } from "./archives.service"
 import { CreateArchiveDto } from "./dto/create-archive.dto"
@@ -39,7 +41,10 @@ import { UpdateCommentDto } from "./dto/update-comment.dto"
 @ApiTags("archives")
 @Controller("archives")
 export class ArchivesController {
-  constructor(private readonly archivesService: ArchivesService) {}
+  constructor(
+    private readonly archivesService: ArchivesService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: "创建新归档" })
@@ -76,9 +81,12 @@ export class ArchivesController {
   @UseInterceptors(FileInterceptor("file", multerConfig))
   create(
     @Body() createArchiveDto: CreateArchiveDto,
+    @Req() req: Request,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.archivesService.create(createArchiveDto, file)
+    const userAgent =
+      req.headers["user-agent"] || this.configService.fallbackUserAgent
+    return this.archivesService.create(createArchiveDto, userAgent, file)
   }
 
   @Get()

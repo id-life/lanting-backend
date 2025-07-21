@@ -4,6 +4,7 @@ import {
   Get,
   Post,
   Query,
+  Req,
   UploadedFile,
   UseInterceptors,
 } from "@nestjs/common"
@@ -16,6 +17,8 @@ import {
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger"
+import { Request } from "express"
+import { ConfigService } from "@/config/config.service"
 import { multerConfig } from "@/config/configuration/multer.config"
 import { TributeFileUploadDto } from "./dto/file-upload.dto"
 import { TributeService } from "./tribute.service"
@@ -23,7 +26,10 @@ import { TributeService } from "./tribute.service"
 @ApiTags("tribute")
 @Controller("tribute")
 export class TributeController {
-  constructor(private readonly tributeService: TributeService) {}
+  constructor(
+    private readonly tributeService: TributeService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get("info")
   @ApiOperation({ summary: "获取链接信息" })
@@ -86,8 +92,10 @@ export class TributeController {
       },
     },
   })
-  getInfo(@Query("link") link: string) {
-    return this.tributeService.getInfo(link)
+  getInfo(@Query("link") link: string, @Req() req: Request) {
+    const userAgent =
+      req.headers["user-agent"] || this.configService.fallbackUserAgent
+    return this.tributeService.getInfo(link, userAgent)
   }
 
   @Post("extract-html")

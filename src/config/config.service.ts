@@ -19,6 +19,12 @@ export class ConfigService {
     return this.nestConfigService.get("app.API_PREFIX", { infer: true })
   }
 
+  get fallbackUserAgent() {
+    return this.nestConfigService.get("app.FALLBACK_USER_AGENT", {
+      infer: true,
+    })
+  }
+
   get databaseUrl() {
     return this.nestConfigService.get("app.DATABASE_URL", { infer: true })
   }
