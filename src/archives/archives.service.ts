@@ -89,7 +89,11 @@ export class ArchivesService {
     })
   }
 
-  async create(createArchiveDto: CreateArchiveDto, file?: Express.Multer.File) {
+  async create(
+    createArchiveDto: CreateArchiveDto,
+    userAgent: string,
+    file?: Express.Multer.File,
+  ) {
     // DTO 层已确保 chapter 不为空且为字符串，这里只需验证有效性
     this.validateChapter(createArchiveDto.chapter)
 
@@ -115,7 +119,11 @@ export class ArchivesService {
         try {
           const { stdout, stderr } = await execa(
             "single-file",
-            [archive.originalUrl, "--dump-content"],
+            [
+              archive.originalUrl,
+              "--dump-content",
+              `--user-agent=${userAgent}`,
+            ],
             {
               timeout: 120000,
               killSignal: "SIGTERM",
@@ -993,6 +1001,9 @@ export class ArchivesService {
           updatedAt: true,
         },
       })
+
+      // 清除搜索关键词缓存，因为数据已发生变化
+      await this.cacheManager.del("search_keywords:all")
 
       return {
         success: true,

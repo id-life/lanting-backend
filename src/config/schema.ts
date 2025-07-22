@@ -9,6 +9,11 @@ export const appConfigSchema = z.object({
     .refine((val) => val !== 0, "Port cannot be 0")
     .catch(8000),
   API_PREFIX: z.string().optional(),
+  FALLBACK_USER_AGENT: z
+    .string()
+    .default(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    ),
 
   // database
   DATABASE_URL: z.string().url().optional(),
