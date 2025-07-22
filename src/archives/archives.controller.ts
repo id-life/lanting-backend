@@ -6,7 +6,6 @@ import {
   Get,
   Param,
   ParseIntPipe,
-  Patch,
   Post,
   Query,
   Req,
@@ -400,7 +399,7 @@ export class ArchivesController {
     return this.archivesService.findOne(id, includeComments)
   }
 
-  @Patch(":id")
+  @Post(":id")
   @ApiOperation({ summary: "更新归档" })
   @ApiParam({ name: "id", description: "归档ID" })
   @ApiResponse({
@@ -695,7 +694,7 @@ export class ArchivesController {
     return this.archivesService.getCommentsByArchive(id)
   }
 
-  @Patch(":id/comments/:commentId")
+  @Post(":id/comments/:commentId")
   @ApiOperation({ summary: "更新评论" })
   @ApiParam({ name: "id", description: "归档ID", example: 123 })
   @ApiParam({ name: "commentId", description: "评论ID", example: 1 })
