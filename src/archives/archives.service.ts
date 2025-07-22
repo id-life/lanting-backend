@@ -1002,6 +1002,9 @@ export class ArchivesService {
         },
       })
 
+      // 清除搜索关键词缓存，因为数据已发生变化
+      await this.cacheManager.del("search_keywords:all")
+
       return {
         success: true,
         data: searchKeyword,

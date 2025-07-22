@@ -177,6 +177,63 @@ export class ArchivesController {
     return this.archivesService.getSearchKeywords()
   }
 
+  @Post("search-keywords")
+  @ApiOperation({ summary: "记录搜索关键词" })
+  @ApiBody({
+    type: SearchKeywordDto,
+    examples: {
+      example1: {
+        summary: "记录搜索关键词",
+        value: {
+          keyword: "JavaScript",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: "搜索关键词记录成功",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 1 },
+            keyword: { type: "string", example: "JavaScript" },
+            searchCount: { type: "number", example: 5 },
+            createdAt: { type: "string", example: "2025-07-07T02:30:00.000Z" },
+            updatedAt: { type: "string", example: "2025-07-07T02:30:00.000Z" },
+          },
+        },
+        message: {
+          type: "string",
+          example: "Search keyword recorded successfully",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "请求参数错误",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        data: { type: "null", example: null },
+        message: {
+          type: "string",
+          example: "Keyword cannot be empty",
+        },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  recordSearchKeyword(@Body() searchKeywordDto: SearchKeywordDto) {
+    return this.archivesService.recordSearchKeyword(searchKeywordDto.keyword)
+  }
+
   @Get("content/:storageUrl")
   @ApiOperation({
     summary: "获取归档内容（仅支持 S3）",
@@ -826,63 +883,5 @@ export class ArchivesController {
     @Param("commentId", ParseIntPipe) commentId: number,
   ) {
     return this.archivesService.deleteComment(commentId, archiveId)
-  }
-
-  // 搜索关键词相关路由
-  @Post("search-keywords")
-  @ApiOperation({ summary: "记录搜索关键词" })
-  @ApiBody({
-    type: SearchKeywordDto,
-    examples: {
-      example1: {
-        summary: "记录搜索关键词",
-        value: {
-          keyword: "JavaScript",
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 201,
-    description: "搜索关键词记录成功",
-    schema: {
-      type: "object",
-      properties: {
-        success: { type: "boolean", example: true },
-        data: {
-          type: "object",
-          properties: {
-            id: { type: "number", example: 1 },
-            keyword: { type: "string", example: "JavaScript" },
-            searchCount: { type: "number", example: 5 },
-            createdAt: { type: "string", example: "2025-07-07T02:30:00.000Z" },
-            updatedAt: { type: "string", example: "2025-07-07T02:30:00.000Z" },
-          },
-        },
-        message: {
-          type: "string",
-          example: "Search keyword recorded successfully",
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: "请求参数错误",
-    schema: {
-      type: "object",
-      properties: {
-        success: { type: "boolean", example: false },
-        data: { type: "null", example: null },
-        message: {
-          type: "string",
-          example: "Keyword cannot be empty",
-        },
-      },
-    },
-  })
-  @UsePipes(new ValidationPipe({ transform: true }))
-  recordSearchKeyword(@Body() searchKeywordDto: SearchKeywordDto) {
-    return this.archivesService.recordSearchKeyword(searchKeywordDto.keyword)
   }
 }
