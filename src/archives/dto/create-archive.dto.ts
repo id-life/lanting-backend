@@ -91,24 +91,50 @@ export class CreateArchiveDto {
   remarks?: string
 
   @ApiProperty({
-    description: "原始URL",
+    description:
+      "文件原始URL列表（可选）。支持灵活的混合模式：按索引位置与files数组对应，每个位置可以是：1) 仅URL（系统抓取） 2) 仅文件上传 3) 文件+URL（备份模式）。空字符串表示该位置无URL。",
     required: false,
-    example: "https://example.com/original",
+    type: "array",
+    items: {
+      type: "string",
+    },
+    example: [
+      "https://example.com/online-only", // 位置0: 仅URL抓取
+      "https://example.com/with-backup", // 位置1: 文件+URL备份
+      "", // 位置2: 仅文件上传
+      "https://example.com/another-url", // 位置3: 仅URL抓取
+    ],
   })
   @IsOptional()
-  @IsString()
-  originalUrl?: string
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(({ value }) => {
+    if (typeof value === "string") {
+      return value
+        .split(",")
+        .map((url) => url.trim())
+        .filter((url) => url)
+    }
+    return value
+  })
+  originalUrls?: string[]
 }
 
 export interface ICreateArchive {
   title: string
-  authors?: string[] // 更新为作者数组
+  authors?: string[]
   publisher?: string
   date?: string
   chapter: string
   tags?: string[]
   remarks?: string
-  originalUrl?: string
+  originalUrls?: string[]
   archiveFilename?: string
   fileType?: string
+}
+
+export interface FileProcessingItem {
+  file?: Express.Multer.File
+  originalUrl?: string
+  fileIndex: number
 }

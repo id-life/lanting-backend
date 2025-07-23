@@ -16,7 +16,11 @@ import { AwsService } from "@/common/aws/aws.service"
 import { ConfigService } from "@/config/config.service"
 import { PrismaService } from "../common/prisma/prisma.service"
 import { getValidChapters, isValidChapter } from "./constants/archive-chapters"
-import { CreateArchiveDto, ICreateArchive } from "./dto/create-archive.dto"
+import {
+  CreateArchiveDto,
+  FileProcessingItem,
+  ICreateArchive,
+} from "./dto/create-archive.dto"
 import { CreateCommentDto } from "./dto/create-comment.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 import { UpdateCommentDto } from "./dto/update-comment.dto"
@@ -92,7 +96,7 @@ export class ArchivesService {
   async create(
     createArchiveDto: CreateArchiveDto,
     userAgent: string,
-    file?: Express.Multer.File,
+    files?: Express.Multer.File[],
   ) {
     // DTO 层已确保 chapter 不为空且为字符串，这里只需验证有效性
     this.validateChapter(createArchiveDto.chapter)
@@ -102,80 +106,151 @@ export class ArchivesService {
     }
 
     try {
-      let fileContent: Buffer
-      if (!file && !archive.originalUrl) {
+      // 准备处理文件项目数组
+      const fileProcessingItems: FileProcessingItem[] = []
+
+      // 检查是否提供了文件或URL
+      if (!files?.length && !archive.originalUrls?.length) {
         throw new BadRequestException({
           success: false,
           data: null,
-          message: "Either a file or an original URL must be provided",
+          message: "Either files or originalUrls must be provided",
         })
-      } else if (file) {
-        // upload
-        const fileExt = extname(file.originalname).toLowerCase()
-        archive.fileType = fileExt.substring(1)
-        fileContent = file.buffer
-      } else if (archive.originalUrl) {
-        // use single-file-cli
-        try {
-          const { stdout, stderr } = await execa(
-            "single-file",
-            [
-              archive.originalUrl,
-              "--dump-content",
-              `--user-agent=${userAgent}`,
-            ],
-            {
-              timeout: 120000,
-              killSignal: "SIGTERM",
-            },
-          )
-
-          if (stderr) {
-            throw new Error(stderr)
-          }
-
-          archive.fileType = "html"
-          fileContent = Buffer.from(stdout, "utf-8")
-        } catch (error) {
-          this.logger.error(
-            `Failed to fetch content from ${archive.originalUrl}: ${error.message}`,
-          )
-
-          const simpleHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <title>${archive.title}</title>
-            <meta name="author" content="${archive.authors?.join(" ")}">
-            <meta name="date" content="${archive.date}">
-          </head>
-          <body>
-            <h1>${archive.title}</h1>
-            <p>原始链接: <a href="${archive.originalUrl}">${archive.originalUrl}</a></p>
-            <p>作者: ${archive.authors?.join(" ")}</p>
-            <p>出版方: ${archive.publisher}</p>
-            <p>日期: ${archive.date}</p>
-            <p>备注: ${archive.remarks || ""}</p>
-            <p>抓取失败，请访问原始链接查看内容。</p>
-          </body>
-          </html>
-        `
-          archive.fileType = "html"
-          fileContent = Buffer.from(simpleHtml, "utf-8")
-        }
       }
 
-      // relative path, use this.awsService.getFileContent to get the file content
-      const archivePath = await this.awsService.uploadPublicFile(
-        this.configService.awsS3Directory,
-        `${createArchiveDto.title}${Date.now()}${archive.fileType ? `.${archive.fileType}` : ""}`,
-        fileContent!,
+      // 计算最大长度，支持混合模式
+      const maxLength = Math.max(
+        files?.length || 0,
+        archive.originalUrls?.length || 0,
       )
-      const storageFilename = archivePath.replace(
-        `${this.configService.awsS3Directory}/`,
-        "",
-      )
+
+      // 统一处理所有位置的文件/URL，支持混合模式
+      for (let index = 0; index < maxLength; index++) {
+        const file = files?.[index]
+        const originalUrl = archive.originalUrls?.[index]
+
+        // 跳过完全空的位置（既没有文件也没有URL）
+        if (!file && (!originalUrl || !originalUrl.trim())) {
+          continue
+        }
+
+        fileProcessingItems.push({
+          file: file || undefined,
+          originalUrl:
+            originalUrl && originalUrl.trim() ? originalUrl.trim() : undefined,
+          fileIndex: index,
+        })
+      }
+
+      if (fileProcessingItems.length === 0) {
+        throw new BadRequestException({
+          success: false,
+          data: null,
+          message: "No valid files or URLs provided",
+        })
+      }
+
+      // 处理每个文件项目并生成内容
+      const processedFiles: Array<{
+        content: Buffer
+        filename: string
+        fileType?: string
+        originalUrl?: string
+      }> = []
+
+      for (const item of fileProcessingItems) {
+        let fileContent: Buffer
+        let fileType: string | undefined
+        let filename: string
+
+        if (item.file) {
+          // 处理上传的文件
+          const fileExt = extname(item.file.originalname).toLowerCase()
+          fileType = fileExt.substring(1)
+          fileContent = item.file.buffer
+          filename = `${createArchiveDto.title}_${item.fileIndex}_${Date.now()}${fileExt}`
+        } else if (item.originalUrl) {
+          // 处理URL（使用single-file-cli）
+          try {
+            const { stdout, stderr } = await execa(
+              "single-file",
+              [item.originalUrl, "--dump-content", `--user-agent=${userAgent}`],
+              {
+                timeout: 120000,
+                killSignal: "SIGTERM",
+              },
+            )
+
+            if (stderr) {
+              throw new Error(stderr)
+            }
+
+            fileType = "html"
+            fileContent = Buffer.from(stdout, "utf-8")
+            filename = `${createArchiveDto.title}_${item.fileIndex}_${Date.now()}.html`
+          } catch (error) {
+            this.logger.error(
+              `Failed to fetch content from ${item.originalUrl}: ${error.message}`,
+            )
+
+            const simpleHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>${archive.title}</title>
+              <meta name="author" content="${archive.authors?.join(" ")}">
+              <meta name="date" content="${archive.date}">
+              <meta name="publisher" content="${archive.publisher}">
+              <meta name="chapter" content="${archive.chapter}">
+              <meta name="tags" content="${archive.tags?.join(", ")}">
+              <meta name="remarks" content="${archive.remarks}">
+            </head>
+            <body>
+              <h1>${archive.title}</h1>
+              <p>原始链接: <a href="${item.originalUrl}">${item.originalUrl}</a></p>
+              <p>作者: ${archive.authors?.join(" ")}</p>
+              <p>出版方: ${archive.publisher}</p>
+              <p>日期: ${archive.date}</p>
+              <p>备注: ${archive.remarks || ""}</p>
+              <p>抓取失败，请访问原始链接查看内容。</p>
+            </body>
+            </html>
+          `
+            fileType = "html"
+            fileContent = Buffer.from(simpleHtml, "utf-8")
+            filename = `${createArchiveDto.title}_${item.fileIndex}_${Date.now()}.html`
+          }
+        } else {
+          continue // 跳过无效项目
+        }
+
+        // 上传文件到S3
+        const archivePath = await this.awsService.uploadPublicFile(
+          this.configService.awsS3Directory,
+          filename,
+          fileContent,
+        )
+        const storageFilename = archivePath.replace(
+          `${this.configService.awsS3Directory}/`,
+          "",
+        )
+
+        processedFiles.push({
+          content: fileContent,
+          filename: storageFilename,
+          fileType,
+          originalUrl: item.originalUrl,
+        })
+      }
+
+      if (processedFiles.length === 0) {
+        throw new BadRequestException({
+          success: false,
+          data: null,
+          message: "No files were successfully processed",
+        })
+      }
 
       // 使用事务创建档案和作者关系
       const archiveRes = await this.prismaService.$transaction(
@@ -189,16 +264,18 @@ export class ArchivesService {
             },
           })
 
-          // 创建档案原始文件记录
-          await prisma.archiveOrig.create({
-            data: {
-              archiveId: newArchive.id,
-              originalUrl: archive.originalUrl,
-              storageUrl: storageFilename,
-              fileType: archive.fileType,
-              storageType: "s3",
-            },
-          })
+          // 为每个处理的文件创建档案原始文件记录
+          for (const processedFile of processedFiles) {
+            await prisma.archiveOrig.create({
+              data: {
+                archiveId: newArchive.id,
+                originalUrl: processedFile.originalUrl,
+                storageUrl: processedFile.filename,
+                fileType: processedFile.fileType,
+                storageType: "s3",
+              },
+            })
+          }
 
           // 处理标签关系
           if (createArchiveDto.tags && createArchiveDto.tags.length > 0) {

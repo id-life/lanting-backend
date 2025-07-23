@@ -10,12 +10,12 @@ import {
   Query,
   Req,
   Res,
-  UploadedFile,
+  UploadedFiles,
   UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from "@nestjs/common"
-import { FileInterceptor } from "@nestjs/platform-express"
+import { FilesInterceptor } from "@nestjs/platform-express"
 import {
   ApiBody,
   ApiConsumes,
@@ -46,7 +46,11 @@ export class ArchivesController {
   ) {}
 
   @Post()
-  @ApiOperation({ summary: "创建新归档" })
+  @ApiOperation({
+    summary: "创建新归档",
+    description:
+      "支持多文件上传，每个文件可以关联一个可选的原始URL。支持三种模式：1) 纯文件上传 2) 文件+对应原始URL 3) 仅通过原始URL抓取内容",
+  })
   @ApiResponse({
     status: 201,
     description: "归档创建成功",
@@ -54,8 +58,174 @@ export class ArchivesController {
       type: "object",
       properties: {
         success: { type: "boolean", example: true },
-        data: { $ref: "#/components/schemas/Archive" },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number", example: 123 },
+            title: {
+              type: "string",
+              example: "完整归档示例：前端开发最佳实践",
+            },
+            authors: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                },
+              },
+              example: [
+                { id: 1, name: "前端专家" },
+                { id: 2, name: "UI设计师" },
+              ],
+            },
+            publisher: {
+              type: "object",
+              properties: {
+                id: { type: "number" },
+                name: { type: "string" },
+              },
+              nullable: true,
+              example: { id: 1, name: "前端技术社区" },
+            },
+            date: {
+              type: "object",
+              properties: {
+                id: { type: "number" },
+                value: { type: "string" },
+              },
+              nullable: true,
+              example: { id: 1, value: "2025-07-23" },
+            },
+            chapter: { type: "string", example: "群像" },
+            tags: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                },
+              },
+              example: [
+                { id: 1, name: "前端" },
+                { id: 2, name: "Vue" },
+                { id: 3, name: "React" },
+              ],
+            },
+            remarks: {
+              type: "string",
+              nullable: true,
+              example: "这是一个包含所有字段的完整归档示例",
+            },
+            origs: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  originalUrl: { type: "string", nullable: true },
+                  storageUrl: { type: "string" },
+                  fileType: { type: "string", nullable: true },
+                  storageType: { type: "string" },
+                },
+              },
+              example: [
+                {
+                  id: 1,
+                  originalUrl:
+                    "https://frontend.example.com/vue-best-practices",
+                  storageUrl: "vue_best_practices_20250723.pdf",
+                  fileType: "pdf",
+                  storageType: "s3",
+                },
+              ],
+            },
+            likes: { type: "number", example: 0 },
+          },
+        },
         message: { type: "string", example: "Archive created successfully" },
+      },
+    },
+    examples: {
+      "complete-response": {
+        summary: "完整字段响应示例",
+        value: {
+          success: true,
+          data: {
+            id: 123,
+            title: "完整归档示例：前端开发最佳实践",
+            authors: [
+              { id: 1, name: "前端专家" },
+              { id: 2, name: "UI设计师" },
+              { id: 3, name: "架构师" },
+            ],
+            publisher: { id: 1, name: "前端技术社区" },
+            date: { id: 1, value: "2025-07-23" },
+            chapter: "群像",
+            tags: [
+              { id: 1, name: "前端" },
+              { id: 2, name: "Vue" },
+              { id: 3, name: "React" },
+              { id: 4, name: "TypeScript" },
+              { id: 5, name: "最佳实践" },
+            ],
+            remarks: "这是一个包含所有字段的完整归档示例",
+            origs: [
+              {
+                id: 1,
+                originalUrl: "https://frontend.example.com/vue-best-practices",
+                storageUrl: "vue_best_practices_20250723.pdf",
+                fileType: "pdf",
+                storageType: "s3",
+              },
+              {
+                id: 2,
+                originalUrl: "https://frontend.example.com/react-performance",
+                storageUrl: "react_performance_guide.html",
+                fileType: "html",
+                storageType: "s3",
+              },
+              {
+                id: 3,
+                originalUrl: null, // 本地上传文件无原始URL
+                storageUrl: "typescript_manual.md",
+                fileType: "md",
+                storageType: "s3",
+              },
+            ],
+            likes: 0,
+          },
+          message: "Archive created successfully",
+        },
+      },
+      "simple-response": {
+        summary: "简单响应示例",
+        value: {
+          success: true,
+          data: {
+            id: 124,
+            title: "技术文档",
+            authors: [{ id: 4, name: "技术作者" }],
+            publisher: null,
+            date: null,
+            chapter: "本纪",
+            tags: [],
+            remarks: null,
+            origs: [
+              {
+                id: 4,
+                originalUrl: null,
+                storageUrl: "document.pdf",
+                fileType: "pdf",
+                storageType: "s3",
+              },
+            ],
+            likes: 0,
+          },
+          message: "Archive created successfully",
+        },
       },
     },
   })
@@ -69,23 +239,200 @@ export class ArchivesController {
         data: { type: "null", example: null },
         message: {
           type: "string",
-          example: "Either a file or an original URL must be provided",
+          example:
+            "At least one of the following must be provided: files (for file upload) or originalUrls (for URL fetching)",
         },
       },
     },
   })
-  @ApiBody({ type: ArchiveFileUploadDto })
+  @ApiBody({
+    type: ArchiveFileUploadDto,
+    description: "支持多文件上传的归档创建请求",
+    examples: {
+      "minimal-required": {
+        summary: "最小必填字段",
+        description: "只包含必填字段的最简示例",
+        value: {
+          title: "最简归档示例",
+          chapter: "本纪",
+          // files: "至少需要上传1个文件或提供1个URL"
+        },
+      },
+      "files-only": {
+        summary: "纯文件上传",
+        description: "只上传文件，不提供原始URL，包含所有可选字段",
+        value: {
+          title: "本地技术文档合集",
+          chapter: "本纪",
+          authors: ["张三", "李四", "王五"],
+          publisher: "技术出版社",
+          date: "2025-07-23",
+          tags: ["技术", "编程", "开发", "教程"],
+          remarks: "这是一份重要的技术文档归档，包含多个本地上传的文件",
+          // files: "通过表单上传的文件数组（最多10个文件）"
+        },
+      },
+      "files-with-urls": {
+        summary: "文件+原始URL",
+        description: "上传文件同时提供对应的原始URL，完整字段示例",
+        value: {
+          title: "网页内容备份归档",
+          chapter: "列传",
+          authors: ["网站编辑", "内容管理员"],
+          publisher: "某某网站",
+          date: "2025-07-23",
+          tags: ["网页", "备份", "归档", "在线内容"],
+          remarks: "重要网页内容的本地备份，保存原始URL用于追溯",
+          originalUrls: [
+            "https://example.com/important-article",
+            "https://example.com/technical-guide",
+            "https://example.com/tutorial-series",
+          ],
+          // files: "通过表单上传的文件数组，与originalUrls一一对应"
+        },
+      },
+      "urls-only": {
+        summary: "仅URL抓取",
+        description: "不上传文件，仅提供URL让系统抓取内容，完整字段示例",
+        value: {
+          title: "在线资源自动抓取归档",
+          chapter: "搜神",
+          authors: ["在线作者1", "在线作者2"],
+          publisher: "互联网",
+          date: "2025-07-23",
+          tags: ["自动抓取", "在线资源", "实时内容"],
+          remarks: "通过URL自动抓取的在线内容，系统会自动获取并保存",
+          originalUrls: [
+            "https://example.com/api-documentation",
+            "https://example.com/best-practices",
+            "https://example.com/community-guide",
+          ],
+        },
+      },
+      "mixed-mode": {
+        summary: "混合模式",
+        description:
+          "支持文件与URL的灵活组合：可以只有文件、只有URL、或两者都有。按索引位置一一对应。",
+        value: {
+          title: "混合内容归档：本地文件+在线资源",
+          chapter: "群像",
+          authors: ["混合作者1", "混合作者2", "本地作者"],
+          publisher: "技术社区",
+          date: "2025-07-23",
+          tags: ["混合模式", "本地文件", "在线资源", "综合归档"],
+          remarks:
+            "演示混合模式：位置0=URL抓取，位置1=本地文件+URL，位置2=仅本地文件，位置3=仅URL抓取",
+          originalUrls: [
+            "https://example.com/online-only", // 位置0: 仅URL，无文件上传
+            "https://example.com/with-backup", // 位置1: 有URL也有文件上传
+            "", // 位置2: 仅文件上传，无URL
+            "https://example.com/another-online", // 位置3: 仅URL，无文件上传
+          ],
+          // 对应的files上传：
+          // files[0]: 无（仅URL抓取）
+          // files[1]: 有文件（本地备份，同时保留原始URL）
+          // files[2]: 有文件（纯本地文件）
+          // files[3]: 无（仅URL抓取）
+        },
+      },
+      "all-chapters": {
+        summary: "所有章节类别示例",
+        description: "展示所有可用的章节类别",
+        value: {
+          title: "章节类别演示",
+          chapter: "世家", // 使用不同的章节
+          authors: ["史学家", "编纂者"],
+          publisher: "史书出版社",
+          date: "2025-07-23",
+          tags: ["史书", "世家", "传记"],
+          remarks: "可用章节：本纪、世家、搜神、列传、游侠、群像、随园食单",
+          originalUrls: ["https://example.com/historical-content"],
+        },
+      },
+      "single-author": {
+        summary: "单作者示例",
+        description: "只有一个作者的简单示例",
+        value: {
+          title: "个人技术博客归档",
+          chapter: "随园食单",
+          authors: ["技术博主"],
+          publisher: "个人博客",
+          date: "2025-07-23",
+          tags: ["个人博客", "技术分享"],
+          remarks: "个人技术博客的精选内容归档",
+          originalUrls: ["https://blog.example.com/tech-posts"],
+        },
+      },
+      "no-optional-fields": {
+        summary: "无可选字段",
+        description: "只包含必填字段，不包含任何可选字段",
+        value: {
+          title: "纯净归档示例",
+          chapter: "游侠",
+          originalUrls: ["https://example.com/simple-content"],
+        },
+      },
+      "max-fields": {
+        summary: "最大字段数量",
+        description: "包含最多作者、标签等字段的示例",
+        value: {
+          title: "大型项目文档归档：企业级前端架构设计与实现指南",
+          chapter: "群像",
+          authors: [
+            "首席架构师",
+            "前端团队负责人",
+            "UI/UX设计师",
+            "产品经理",
+            "技术文档工程师",
+            "质量保证工程师",
+            "DevOps工程师",
+            "项目经理",
+          ],
+          publisher: "企业技术部门",
+          date: "2025-07-23",
+          tags: [
+            "企业级",
+            "前端架构",
+            "Vue.js",
+            "React",
+            "Angular",
+            "TypeScript",
+            "Webpack",
+            "微前端",
+            "组件库",
+            "设计系统",
+            "性能优化",
+            "最佳实践",
+            "代码规范",
+            "自动化测试",
+            "CI/CD",
+            "文档管理",
+          ],
+          remarks:
+            "这是一个企业级前端项目的完整技术文档归档，包含了从架构设计到具体实现的全套资料。文档涵盖了技术选型、架构设计、开发规范、测试策略、部署流程等各个方面，是团队协作和知识传承的重要资料。",
+          originalUrls: [
+            "https://company.example.com/frontend-architecture-guide",
+            "https://company.example.com/component-library-docs",
+            "https://company.example.com/performance-optimization",
+            "https://company.example.com/testing-strategy",
+            "https://company.example.com/deployment-guide",
+          ],
+          // files: "对应5个文件：架构指南.pdf、组件库文档.html、性能优化手册.md、测试策略.docx、部署指南.txt"
+        },
+      },
+    },
+  })
   @ApiConsumes("multipart/form-data")
   @UsePipes(new ValidationPipe({ transform: true }))
-  @UseInterceptors(FileInterceptor("file", multerConfig))
+  @UseInterceptors(FilesInterceptor("files", 10, multerConfig)) // 支持最多10个文件上传，每个文件可关联originalUrl
   create(
     @Body() createArchiveDto: CreateArchiveDto,
     @Req() req: Request,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
     const userAgent =
       req.headers["user-agent"] || this.configService.fallbackUserAgent
-    return this.archivesService.create(createArchiveDto, userAgent, file)
+    return this.archivesService.create(createArchiveDto, userAgent, files)
   }
 
   @Get()
@@ -99,7 +446,65 @@ export class ArchivesController {
         success: { type: "boolean", example: true },
         data: {
           type: "array",
-          items: { $ref: "#/components/schemas/Archive" },
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "number" },
+              title: { type: "string" },
+              authors: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "number" },
+                    name: { type: "string" },
+                  },
+                },
+              },
+              publisher: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                },
+                nullable: true,
+              },
+              date: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  value: { type: "string" },
+                },
+                nullable: true,
+              },
+              chapter: { type: "string" },
+              tags: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "number" },
+                    name: { type: "string" },
+                  },
+                },
+              },
+              remarks: { type: "string", nullable: true },
+              origs: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "number" },
+                    originalUrl: { type: "string", nullable: true },
+                    storageUrl: { type: "string" },
+                    fileType: { type: "string", nullable: true },
+                    storageType: { type: "string" },
+                  },
+                },
+              },
+              likes: { type: "number" },
+            },
+          },
         },
         message: { type: "string", example: "Archives retrieved successfully" },
       },
@@ -466,7 +871,65 @@ export class ArchivesController {
       type: "object",
       properties: {
         success: { type: "boolean", example: true },
-        data: { $ref: "#/components/schemas/Archive" },
+        data: {
+          type: "object",
+          properties: {
+            id: { type: "number" },
+            title: { type: "string" },
+            authors: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                },
+              },
+            },
+            publisher: {
+              type: "object",
+              properties: {
+                id: { type: "number" },
+                name: { type: "string" },
+              },
+              nullable: true,
+            },
+            date: {
+              type: "object",
+              properties: {
+                id: { type: "number" },
+                value: { type: "string" },
+              },
+              nullable: true,
+            },
+            chapter: { type: "string" },
+            tags: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  name: { type: "string" },
+                },
+              },
+            },
+            remarks: { type: "string", nullable: true },
+            origs: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  originalUrl: { type: "string", nullable: true },
+                  storageUrl: { type: "string" },
+                  fileType: { type: "string", nullable: true },
+                  storageType: { type: "string" },
+                },
+              },
+            },
+            likes: { type: "number" },
+          },
+        },
         message: { type: "string", example: "Archive updated successfully" },
       },
     },
