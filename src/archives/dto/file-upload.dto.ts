@@ -69,16 +69,17 @@ export class ArchiveFileUploadDto {
 
   @ApiProperty({
     description:
-      "文件原始URL列表（可选）。与files数组按索引一一对应，originalUrls[0]对应files[0]。支持混合模式：数组中可以包含空字符串表示对应文件无原始URL。如果不上传文件，可以仅提供此数组让系统抓取URL内容。",
+      "文件原始URL列表（可选）。支持灵活的混合模式：按索引位置与files数组对应，每个位置可以是：1) 仅URL（系统抓取） 2) 仅文件上传 3) 文件+URL（备份模式）。空字符串表示该位置无URL。",
     type: "array",
     items: {
       type: "string",
     },
     required: false,
     example: [
-      "https://example.com/source1.html",
-      "", // 第二个文件没有原始URL
-      "https://example.com/source3.pdf",
+      "https://example.com/online-only", // 位置0: 仅URL抓取
+      "https://example.com/with-backup", // 位置1: 文件+URL备份
+      "", // 位置2: 仅文件上传
+      "https://example.com/another-url", // 位置3: 仅URL抓取
     ],
   })
   originalUrls?: string[]

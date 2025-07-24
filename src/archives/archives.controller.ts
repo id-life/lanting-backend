@@ -423,7 +423,14 @@ export class ArchivesController {
     },
   })
   @ApiConsumes("multipart/form-data")
-  @UsePipes(new ValidationPipe({ transform: true }))
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: false,
+      skipMissingProperties: true,
+    }),
+  )
   @UseInterceptors(FilesInterceptor("files", 10, multerConfig)) // 支持最多10个文件上传，每个文件可关联originalUrl
   create(
     @Body() createArchiveDto: CreateArchiveDto,
@@ -862,8 +869,74 @@ export class ArchivesController {
   }
 
   @Post(":id")
-  @ApiOperation({ summary: "更新归档" })
+  @ApiOperation({
+    summary: "更新归档",
+    description:
+      "智能文件管理：通过files和originalUrls两个数组的组合，灵活处理文件的保持、替换、新增、删除操作。files数组可包含文件对象或storageUrl字符串，originalUrls数组指定URL抓取，前端按索引顺序传递，后端自动识别处理。",
+  })
   @ApiParam({ name: "id", description: "归档ID" })
+  @ApiBody({
+    type: UpdateArchiveDto,
+    description: "支持多文件上传的归档更新请求",
+    examples: {
+      "update-basic": {
+        summary: "基本信息更新",
+        description: "只更新文本字段，不涉及文件",
+        value: {
+          title: "更新后的标题",
+          chapter: "世家",
+          authors: ["更新作者1", "更新作者2"],
+          publisher: "更新出版社",
+          date: "2025-07-23",
+          tags: ["更新标签1", "更新标签2"],
+          remarks: "更新后的备注信息",
+        },
+      },
+      "keep-and-update": {
+        summary: "保持部分文件，更新其他文件",
+        description:
+          "通过files中的storageUrl字符串保持现有文件，新位置上传文件或抓取URL",
+        value: {
+          title: "智能文件管理示例1",
+          chapter: "群像",
+          authors: ["更新作者"],
+          remarks: "保持第1、3个文件不变，更新第2个文件",
+          // files数组中: 位置0和2为storageUrl字符串(保持现有)，位置1上传新文件
+        },
+      },
+      "mixed-operations": {
+        summary: "混合操作：保持、替换、新增、删除",
+        description: "演示完整的文件管理能力",
+        value: {
+          title: "智能文件管理示例2",
+          chapter: "列传",
+          remarks:
+            "保持第1个文件，从URL抓取第2个，上传第3个新文件，删除原第4个文件",
+          // files数组: [storageUrl字符串, 新上传文件, 新上传文件]
+          originalUrls: [
+            "", // 位置0: 使用files中的storageUrl字符串
+            "https://example.com/replacement.html", // 位置1: 从URL抓取
+            "", // 位置2: 使用files中的上传文件
+            // 位置3: 不传，删除原文件
+          ],
+        },
+      },
+      "pure-file-upload": {
+        summary: "纯文件上传更新",
+        description: "全部使用新上传文件，替换所有现有文件",
+        value: {
+          title: "纯文件上传示例",
+          chapter: "世家",
+          remarks: "使用files数组上传新文件，替换所有现有文件",
+          originalUrls: [
+            "", // 位置0: 使用files中的上传文件
+            "https://example.com/web-content.html", // 位置1: 从URL抓取
+            "", // 位置2: 使用files中的上传文件
+          ],
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 200,
     description: "归档更新成功",
@@ -961,12 +1034,25 @@ export class ArchivesController {
       },
     },
   })
-  @UsePipes(new ValidationPipe({ transform: true }))
+  @ApiConsumes("multipart/form-data")
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: false,
+      forbidNonWhitelisted: false,
+      skipMissingProperties: true,
+    }),
+  )
+  @UseInterceptors(FilesInterceptor("files", 10, multerConfig))
   update(
     @Param("id", ParseIntPipe) id: number,
     @Body() updateArchiveDto: UpdateArchiveDto,
+    @Req() req: Request,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
-    return this.archivesService.update(id, updateArchiveDto)
+    const userAgent =
+      req.headers["user-agent"] || this.configService.fallbackUserAgent
+    return this.archivesService.update(id, updateArchiveDto, userAgent, files)
   }
 
   @Delete(":id")

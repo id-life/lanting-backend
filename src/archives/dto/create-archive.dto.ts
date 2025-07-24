@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger"
+import { ApiHideProperty, ApiProperty } from "@nestjs/swagger"
 import { Transform } from "class-transformer"
 import { IsArray, IsNotEmpty, IsOptional, IsString } from "class-validator"
 
@@ -118,6 +118,10 @@ export class CreateArchiveDto {
     return value
   })
   originalUrls?: string[]
+
+  @ApiHideProperty()
+  @IsOptional()
+  files?: any[]
 }
 
 export interface ICreateArchive {
