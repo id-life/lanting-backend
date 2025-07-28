@@ -1,4 +1,6 @@
-import { ApiProperty, PartialType } from "@nestjs/swagger"
+import { ApiHideProperty, ApiProperty, PartialType } from "@nestjs/swagger"
+import { Transform } from "class-transformer"
+import { IsArray, IsOptional, IsString } from "class-validator"
 import { CreateArchiveDto } from "./create-archive.dto"
 
 export class UpdateArchiveDto extends PartialType(CreateArchiveDto) {
@@ -58,9 +60,47 @@ export class UpdateArchiveDto extends PartialType(CreateArchiveDto) {
   remarks?: string
 
   @ApiProperty({
-    description: "原始URL",
+    description:
+      "文件原始URL列表（可选）。与files数组按索引对应，每个位置可以是：1) URL（从网络抓取内容，优先级最高） 2) 空字符串（该位置使用files中的内容）。注意：如果提供了URL，将优先从URL抓取内容，忽略files中对应位置的内容。",
     required: false,
-    example: "https://example.com/original",
+    type: "array",
+    items: {
+      type: "string",
+    },
+    example: [
+      "https://example.com/web-content.html", // 位置0: 从URL抓取，忽略files[0]
+      "", // 位置1: 使用files[1]的内容（可能是新文件或storageUrl）
+      "https://example.com/another-source.pdf", // 位置2: 从URL抓取，忽略files[2]
+    ],
   })
-  originalUrl?: string
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(({ value }) => {
+    if (typeof value === "string") {
+      return value
+        .split(",")
+        .map((url) => url.trim())
+        .filter((url) => url !== null && url !== undefined) // 保留空字符串，过滤null/undefined
+    }
+    return value
+  })
+  originalUrls?: string[]
+
+  @ApiHideProperty()
+  @IsOptional()
+  files?: any[]
+}
+
+export interface IUpdateArchive {
+  title?: string
+  authors?: string[]
+  publisher?: string
+  date?: string
+  chapter?: string
+  tags?: string[]
+  remarks?: string
+  originalUrls?: string[]
+  archiveFilename?: string
+  fileType?: string
 }
