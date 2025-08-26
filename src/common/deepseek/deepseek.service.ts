@@ -22,7 +22,7 @@ export class DeepSeekService {
   private readonly logger = new Logger(DeepSeekService.name)
   private readonly client: OpenAI
   private readonly model: string
-  private readonly maxTokens: number = 1000
+  private readonly maxTokens: number = 5000
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.deepSeekApiKey
@@ -34,6 +34,7 @@ export class DeepSeekService {
     this.client = new OpenAI({
       baseURL: "https://api.ppinfra.com/v3/openai",
       apiKey,
+      timeout: 120_000,
     })
   }
 
