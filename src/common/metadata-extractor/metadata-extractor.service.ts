@@ -184,56 +184,68 @@ export class MetadataExtractorService {
    * @param result 结果对象
    */
   extractWechatDate(document: Document, result: Partial<Tribute>): void {
-    const dateElement = document.getElementById("publish_time")
+    let dateText = ""
 
-    if (dateElement && dateElement.textContent) {
-      const dateText = dateElement.textContent.trim()
-      if (dateText) {
-        // 处理常见的微信日期格式
-        // 1. 标准格式："2025年03月31日 14:15"
-        let match = dateText.match(/(\d{4})年(\d{2})月(\d{2})日/)
-        if (match) {
-          // 保存完整日期格式 YYYY-MM-DD
-          result.date = `${match[1]}-${match[2]}-${match[3]}`
+    // 方法1：尝试从页面脚本中提取createTime
+    const htmlContent = document.documentElement.outerHTML
+    const createTimeMatch = htmlContent.match(
+      /var\s+createTime\s*=\s*["']([^"']+)["'];?/,
+    )
+    if (createTimeMatch) {
+      dateText = createTimeMatch[1]
+    }
+
+    // 方法2：如果没有找到createTime，尝试从DOM元素获取
+    if (!dateText) {
+      const dateElement = document.getElementById("publish_time")
+      if (dateElement && dateElement.textContent) {
+        dateText = dateElement.textContent.trim()
+      }
+    }
+
+    if (dateText) {
+      // 处理常见的微信日期格式
+      // 1. 标准格式："2025年03月31日 14:15"
+      let match = dateText.match(/(\d{4})年(\d{2})月(\d{2})日/)
+      if (match) {
+        // 保存完整日期格式 YYYY-MM-DD
+        result.date = `${match[1]}-${match[2]}-${match[3]}`
+      }
+      // 2. 特殊格式："今天"、"昨天"、"前天"
+      else if (
+        dateText.includes("今天") ||
+        dateText.includes("昨天") ||
+        dateText.includes("前天") ||
+        dateText.includes("days ago") ||
+        dateText.includes("day ago") ||
+        dateText.includes("小时前") ||
+        dateText.includes("分钟前")
+      ) {
+        // 对于相对日期，使用当前日期
+        const now = new Date()
+        const year = now.getFullYear()
+        const month = (now.getMonth() + 1).toString().padStart(2, "0")
+        const day = now.getDate().toString().padStart(2, "0")
+        result.date = `${year}-${month}-${day}`
+      }
+      // 3. 月日格式："MM月DD日"，假设是当年
+      // TODO
+      // eslint-disable-next-line no-cond-assign
+      else if ((match = dateText.match(/(\d{1,2})月(\d{1,2})日/))) {
+        const now = new Date()
+        const year = now.getFullYear()
+        const month = match[1].padStart(2, "0")
+        const day = match[2].padStart(2, "0")
+        result.date = `${year}-${month}-${day}`
+      }
+      // 4. 使用通用提取方法
+      else {
+        const extractedDate = this.dateUtil.extractDateFromString(dateText)
+        if (extractedDate) {
+          result.date = extractedDate.date
+        } else {
+          result.date = undefined
         }
-        // 2. 特殊格式："今天"、"昨天"、"前天"
-        else if (
-          dateText.includes("今天") ||
-          dateText.includes("昨天") ||
-          dateText.includes("前天") ||
-          dateText.includes("days ago") ||
-          dateText.includes("day ago") ||
-          dateText.includes("小时前") ||
-          dateText.includes("分钟前")
-        ) {
-          // 对于相对日期，使用当前日期
-          const now = new Date()
-          const year = now.getFullYear()
-          const month = (now.getMonth() + 1).toString().padStart(2, "0")
-          const day = now.getDate().toString().padStart(2, "0")
-          result.date = `${year}-${month}-${day}`
-        }
-        // 3. 月日格式："MM月DD日"，假设是当年
-        // TODO
-        // eslint-disable-next-line no-cond-assign
-        else if ((match = dateText.match(/(\d{1,2})月(\d{1,2})日/))) {
-          const now = new Date()
-          const year = now.getFullYear()
-          const month = match[1].padStart(2, "0")
-          const day = match[2].padStart(2, "0")
-          result.date = `${year}-${month}-${day}`
-        }
-        // 4. 使用通用提取方法
-        else {
-          const extractedDate = this.dateUtil.extractDateFromString(dateText)
-          if (extractedDate) {
-            result.date = extractedDate.date
-          } else {
-            result.date = undefined
-          }
-        }
-      } else {
-        result.date = undefined
       }
     } else {
       result.date = undefined
