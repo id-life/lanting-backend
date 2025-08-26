@@ -2,8 +2,15 @@ import { Injectable, Logger } from "@nestjs/common"
 import OpenAI from "openai"
 import { ConfigService } from "@/config/config.service"
 
+export interface DeepSeekHighlight {
+  type: string
+  content: string
+  reason: string
+}
+
 export interface DeepSeekAnalysisResult {
   summary: string
+  highlights: DeepSeekHighlight[]
   keywords: {
     predefined: string[]
     extracted: string[]
@@ -47,7 +54,12 @@ export class DeepSeekService {
 请分析以下文章内容，并完成以下任务：
 
 1. 生成一个简洁的摘要（不超过200字）
-2. 提取${maxKeywords}个关键词（用逗号分隔）
+2. 从文章中提取最精华的内容亮点（3-5个），选择最有意义、最让人印象深刻、最有趣、最值得关注的内容，可以是：
+   - 核心观点
+   - 重要数据
+   - 典型案例  
+   - 有趣内容
+3. 提取${maxKeywords}个关键词
 
 文章标题：${title}
 文章内容：${content}
@@ -55,10 +67,19 @@ export class DeepSeekService {
 请以JSON格式返回结果，格式如下：
 {
   "summary": "文章摘要",
+  "highlights": [
+    {
+      "type": "核心观点/重要数据/典型案例/有趣内容",
+      "content": "详细的精华内容（50-300字，需要包含完整的背景、观点、论证或案例细节，不要只写一句话概括）", 
+      "reason": "详细说明为什么这个内容值得关注，有什么启发价值（30-150字）"
+    }
+  ],
   "keywords": {
     "extracted": ["关键词1", "关键词2", ...]
   }
 }
+
+注意：highlights数组中应该包含文章最精华、最能代表文章核心价值的内容，按重要性排序。每个content字段必须是多句话的详细描述，包含背景、核心内容、具体细节，让读者不看原文也能完全理解这个观点或信息。避免只写一句话的简单概括。
 `
 
       const response = await this.client.chat.completions.create({
@@ -67,7 +88,7 @@ export class DeepSeekService {
           {
             role: "system",
             content:
-              "你是一个专业的文章分析助手，擅长生成文章摘要和提取关键词。请确保返回的结果是有效的JSON格式。",
+              "你是一个专业的文章分析助手，擅长提取文章精华内容和生成摘要。请确保返回的结果是有效的JSON格式。",
           },
           {
             role: "user",
@@ -100,6 +121,7 @@ export class DeepSeekService {
       const result = JSON.parse(response)
       return {
         summary: result.summary || "",
+        highlights: result.highlights || [],
         keywords: {
           predefined: [],
           extracted: result.keywords?.extracted || [],
@@ -113,6 +135,7 @@ export class DeepSeekService {
           const result = JSON.parse(jsonMatch[0])
           return {
             summary: result.summary || "",
+            highlights: result.highlights || [],
             keywords: {
               predefined: [],
               extracted: result.keywords?.extracted || [],
@@ -126,6 +149,7 @@ export class DeepSeekService {
       // 如果还是失败，返回默认值
       return {
         summary: "",
+        highlights: [],
         keywords: {
           predefined: [],
           extracted: [],
