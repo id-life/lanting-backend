@@ -86,6 +86,7 @@ export class TributeService {
         data: {
           ...metadata,
           summary: analysis.summary,
+          highlights: analysis.highlights,
           keywords: {
             predefined: [],
             extracted: analysis.keywords.extracted,
@@ -142,6 +143,7 @@ export class TributeService {
       const info = {
         ...metadata,
         summary: analysis.summary,
+        highlights: analysis.highlights,
         keywords: {
           predefined: [],
           extracted: analysis.keywords.extracted,
@@ -156,6 +158,7 @@ export class TributeService {
           publisher: info.publisher || undefined,
           date: info.date || undefined,
           summary: info.summary || undefined,
+          highlights: info.highlights || [],
           keywords: info.keywords || { predefined: [], extracted: [] },
         },
         message: "HTML content extracted successfully",
