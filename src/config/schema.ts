@@ -38,6 +38,17 @@ export const appConfigSchema = z.object({
   SWAGGER_ENABLED: z
     .preprocess((v) => v === "true", z.boolean())
     .default(false),
+
+  // github oauth
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  GITHUB_CALLBACK_URL: z.string().url().optional(),
+
+  // jwt
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
+
+  // frontend
+  FRONTEND_URL: z.string().url().optional(),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>

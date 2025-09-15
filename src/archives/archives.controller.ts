@@ -11,12 +11,14 @@ import {
   Req,
   Res,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from "@nestjs/common"
 import { FilesInterceptor } from "@nestjs/platform-express"
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiOperation,
@@ -26,6 +28,8 @@ import {
   ApiTags,
 } from "@nestjs/swagger"
 import { Request, Response } from "express"
+import { CurrentUser } from "@/auth/decorators/user.decorator"
+import { JwtAuthGuard } from "@/auth/guards/jwt-auth.guard"
 import { ConfigService } from "@/config/config.service"
 import { multerConfig } from "@/config/configuration/multer.config"
 import { ArchivesService } from "./archives.service"
@@ -46,6 +50,8 @@ export class ArchivesController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: "创建新归档",
     description:
@@ -434,6 +440,7 @@ export class ArchivesController {
   @UseInterceptors(FilesInterceptor("files", 10, multerConfig)) // 支持最多10个文件上传，每个文件可关联originalUrl
   create(
     @Body() createArchiveDto: CreateArchiveDto,
+    @CurrentUser() user: any,
     @Req() req: Request,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
@@ -869,6 +876,8 @@ export class ArchivesController {
   }
 
   @Post(":id")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: "更新归档",
     description:
@@ -1047,6 +1056,7 @@ export class ArchivesController {
   update(
     @Param("id", ParseIntPipe) id: number,
     @Body() updateArchiveDto: UpdateArchiveDto,
+    @CurrentUser() user: any,
     @Req() req: Request,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {

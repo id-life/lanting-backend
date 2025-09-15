@@ -74,4 +74,28 @@ export class ConfigService {
   get swaggerEnabled() {
     return this.nestConfigService.get("app.SWAGGER_ENABLED", { infer: true })
   }
+
+  get githubClientId() {
+    return this.nestConfigService.get("app.GITHUB_CLIENT_ID", { infer: true })
+  }
+
+  get githubClientSecret() {
+    return this.nestConfigService.get("app.GITHUB_CLIENT_SECRET", {
+      infer: true,
+    })
+  }
+
+  get githubCallbackUrl() {
+    return this.nestConfigService.get("app.GITHUB_CALLBACK_URL", {
+      infer: true,
+    })
+  }
+
+  get jwtSecret() {
+    return this.nestConfigService.get("app.JWT_SECRET", { infer: true })
+  }
+
+  get frontendUrl() {
+    return this.nestConfigService.get("app.FRONTEND_URL", { infer: true })
+  }
 }

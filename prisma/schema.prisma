@@ -167,3 +167,19 @@ model SearchKeyword {
   @@index([searchCount(sort: Desc)])
   @@map("search_keywords")
 }
+
+model User {
+  id           String   @id @default(cuid())
+  githubId     String?  @unique // GitHub user ID (optional for local users)
+  username     String   @unique // Username (required for both GitHub and local users)
+  email        String? // Email (optional)
+  avatar       String? // Avatar URL
+  name         String? // Display name
+  password     String? // Password hash (for local authentication)
+  githubSecret String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([githubId])
+  @@index([username])
+}
