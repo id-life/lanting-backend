@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer"
 import {
   Injectable,
   Logger,
@@ -5,7 +6,21 @@ import {
   OnModuleInit,
 } from "@nestjs/common"
 import { ImapFlow } from "imapflow"
+import { Attachment, simpleParser } from "mailparser"
 import { ConfigService } from "@/config/config.service"
+
+interface EmailInfo {
+  messageId?: string
+  subject?: string
+  from: {
+    name?: string
+    address?: string
+  }
+  date?: Date
+  text?: string
+  html?: string | false
+  attachments?: Attachment[]
+}
 
 @Injectable()
 export class EmailService implements OnModuleInit, OnModuleDestroy {
@@ -14,6 +29,10 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
   private reconnectAttempts = 0
   private readonly maxReconnectAttempts = 3
   private reconnectInterval = 5000 // 5 seconds
+  private MAILBOXES = {
+    INBOX: "INBOX",
+    SPAM: "垃圾邮件",
+  }
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -66,10 +85,68 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
       await this.client.connect()
       this.logger.log("Connected to email server")
       this.reconnectAttempts = 0 // 重置重连计数器
+
+      await this.handleUnseenEmails()
     } catch (error) {
       this.logger.error("Failed to connect to email server", error)
       await this.handleReconnect(config)
     }
+  }
+
+  private async handleUnseenEmails() {
+    if (!this.client) {
+      return
+    }
+
+    const lock = await this.client.getMailboxLock(this.MAILBOXES.INBOX)
+
+    try {
+      const unseenEmails = await this.client.search({ seen: false })
+      if (unseenEmails && unseenEmails.length > 0) {
+        const messages = await this.client?.fetchAll(unseenEmails, {
+          envelope: true,
+          source: true,
+        })
+
+        for (const message of messages) {
+          const source = message.source
+
+          if (source) {
+            // 使用 mailparser 解析邮件
+            const emailInfo = await this.processEmail(source)
+            await this.handleEmailContent(emailInfo)
+          }
+        }
+      }
+    } finally {
+      lock?.release()
+    }
+  }
+
+  private async processEmail(
+    buffer: Buffer<ArrayBufferLike>,
+  ): Promise<EmailInfo> {
+    const parsedEmail = await simpleParser(buffer)
+
+    // 提取邮件基本信息
+    const emailInfo: EmailInfo = {
+      messageId: parsedEmail.messageId,
+      subject: parsedEmail.subject,
+      from: {
+        name: parsedEmail.from?.text,
+        address: parsedEmail.from?.value?.[0]?.address,
+      },
+      date: parsedEmail.date,
+      text: parsedEmail.text,
+      html: parsedEmail.html,
+      attachments: parsedEmail.attachments,
+    }
+
+    return emailInfo
+  }
+
+  private async handleEmailContent(_emailInfo: EmailInfo) {
+    // 处理邮件内容的业务逻辑
   }
 
   private async handleReconnect(config: any) {
