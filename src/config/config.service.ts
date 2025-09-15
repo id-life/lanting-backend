@@ -98,4 +98,20 @@ export class ConfigService {
   get frontendUrl() {
     return this.nestConfigService.get("app.FRONTEND_URL", { infer: true })
   }
+
+  get emailHost() {
+    return this.nestConfigService.get("app.EMAIL_HOST", { infer: true })
+  }
+
+  get emailPort() {
+    return this.nestConfigService.get("app.EMAIL_PORT", { infer: true })
+  }
+
+  get emailUsername() {
+    return this.nestConfigService.get("app.EMAIL_USERNAME", { infer: true })
+  }
+
+  get emailPassword() {
+    return this.nestConfigService.get("app.EMAIL_PASSWORD", { infer: true })
+  }
 }

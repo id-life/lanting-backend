@@ -49,6 +49,12 @@ export const appConfigSchema = z.object({
 
   // frontend
   FRONTEND_URL: z.string().url().optional(),
+
+  // email imap
+  EMAIL_HOST: z.string().optional(),
+  EMAIL_PORT: z.coerce.number().optional(),
+  EMAIL_USERNAME: z.string().optional(),
+  EMAIL_PASSWORD: z.string().optional(),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>
