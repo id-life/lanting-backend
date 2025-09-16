@@ -180,8 +180,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  emailWhitelists     EmailWhitelist[]
-  pendingArchiveOrigs PendingArchiveOrig[]
+  emailWhitelists EmailWhitelist[]
 
   @@index([githubId])
   @@index([username])
@@ -191,13 +190,12 @@ model User {
 model EmailWhitelist {
   id        Int      @id @default(autoincrement()) @db.UnsignedInt
   userId    String   @map("user_id")
-  email     String   @db.VarChar(255)
+  email     String   @unique @db.VarChar(255) // 全局唯一邮箱地址
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, email])
   @@index([userId])
   @@index([email])
   @@map("email_whitelists")
@@ -205,7 +203,6 @@ model EmailWhitelist {
 
 model PendingArchiveOrig {
   id           Int      @id @default(autoincrement()) @db.UnsignedInt
-  userId       String   @map("user_id")
   senderEmail  String   @map("sender_email") @db.VarChar(255)
   messageId    String?  @map("message_id") @db.VarChar(255) // 邮件唯一标识，用于去重
   subject      String?  @db.VarChar(500)
@@ -216,9 +213,6 @@ model PendingArchiveOrig {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
   @@index([senderEmail])
   @@index([status])
   @@index([messageId])

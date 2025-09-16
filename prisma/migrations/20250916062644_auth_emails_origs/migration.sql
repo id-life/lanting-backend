@@ -26,16 +26,15 @@ CREATE TABLE `email_whitelists` (
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 
+    UNIQUE INDEX `email_whitelists_email_key`(`email`),
     INDEX `email_whitelists_user_id_idx`(`user_id`),
     INDEX `email_whitelists_email_idx`(`email`),
-    UNIQUE INDEX `email_whitelists_user_id_email_key`(`user_id`, `email`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `pending_archive_origs` (
     `id` INTEGER UNSIGNED NOT NULL AUTO_INCREMENT,
-    `user_id` VARCHAR(191) NOT NULL,
     `sender_email` VARCHAR(255) NOT NULL,
     `message_id` VARCHAR(255) NULL,
     `subject` VARCHAR(500) NULL,
@@ -46,7 +45,6 @@ CREATE TABLE `pending_archive_origs` (
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 
-    INDEX `pending_archive_origs_user_id_idx`(`user_id`),
     INDEX `pending_archive_origs_sender_email_idx`(`sender_email`),
     INDEX `pending_archive_origs_status_idx`(`status`),
     INDEX `pending_archive_origs_message_id_idx`(`message_id`),
@@ -55,6 +53,3 @@ CREATE TABLE `pending_archive_origs` (
 
 -- AddForeignKey
 ALTER TABLE `email_whitelists` ADD CONSTRAINT `email_whitelists_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `pending_archive_origs` ADD CONSTRAINT `pending_archive_origs_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
