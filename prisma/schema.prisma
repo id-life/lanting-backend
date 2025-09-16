@@ -185,6 +185,7 @@ model User {
 
   @@index([githubId])
   @@index([username])
+  @@map("users")
 }
 
 model EmailWhitelist {
