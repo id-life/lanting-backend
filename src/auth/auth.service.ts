@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
 import { User } from "@prisma/client"
-import { PrismaService } from "../common/prisma/prisma.service"
+import { PrismaService } from "@/common/prisma/prisma.service"
 
 interface GitHubUser {
   githubId: string

@@ -5,6 +5,7 @@ import { ArchivesModule } from "./archives/archives.module"
 import { AuthModule } from "./auth/auth.module"
 import { CommonModule } from "./common/common.module"
 import { ConfigModule } from "./config/config.module"
+import { EmailModule } from "./email/email.module"
 import { TributeModule } from "./tribute/tribute.module"
 
 @Module({
@@ -13,6 +14,7 @@ import { TributeModule } from "./tribute/tribute.module"
     ArchivesModule,
     TributeModule,
     CommonModule,
+    EmailModule,
     AuthModule,
   ],
   controllers: [AppController],

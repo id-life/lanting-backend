@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common"
-import { ImapFlow } from "imapflow"
+import { ImapFlow, ImapFlowOptions } from "imapflow"
 import { Attachment, simpleParser } from "mailparser"
 import { ConfigService } from "@/config/config.service"
 
@@ -54,7 +54,8 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
         user: this.configService.emailUsername || "",
         pass: this.configService.emailPassword || "",
       },
-    }
+      logger: false,
+    } satisfies ImapFlowOptions
 
     // 验证配置是否完整
     if (!config.host || !config.auth.user || !config.auth.pass) {
@@ -67,7 +68,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
     await this.connectWithRetry(config)
   }
 
-  private async connectWithRetry(config: any) {
+  private async connectWithRetry(config: ImapFlowOptions) {
     try {
       this.client = new ImapFlow(config)
 

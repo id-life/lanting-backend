@@ -3,7 +3,6 @@ import { Global, Module } from "@nestjs/common"
 import { AwsService } from "./aws/aws.service"
 import { DateUtilService } from "./date-util/date-util.service"
 import { DeepSeekService } from "./deepseek/deepseek.service"
-import { EmailService } from "./email/email.service"
 import { MetadataExtractorService } from "./metadata-extractor/metadata-extractor.service"
 import { PrismaService } from "./prisma/prisma.service"
 import { RedisModule } from "./redis/redis.module"
@@ -27,7 +26,6 @@ import { RedisModule } from "./redis/redis.module"
     DateUtilService,
     DeepSeekService,
     AwsService,
-    EmailService,
   ],
   exports: [
     PrismaService,
@@ -35,7 +33,6 @@ import { RedisModule } from "./redis/redis.module"
     DateUtilService,
     DeepSeekService,
     AwsService,
-    EmailService,
     RedisModule,
   ],
 })
