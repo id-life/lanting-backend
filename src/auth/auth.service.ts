@@ -51,7 +51,19 @@ export class AuthService {
           name,
         },
       })
+
+      // 初始化邮件白名单
+      if (email) {
+        await this.prisma.emailWhitelist.create({
+          data: {
+            userId: user.id,
+            email,
+          },
+        })
+      }
     } else {
+      const originalEmail = user.email
+
       user = await this.prisma.user.update({
         where: { githubId },
         data: {
@@ -61,6 +73,23 @@ export class AuthService {
           name,
         },
       })
+
+      // 只有当邮箱发生变化时才检查并添加到白名单
+      if (email && email !== originalEmail) {
+        await this.prisma.emailWhitelist.upsert({
+          where: {
+            userId_email: {
+              userId: user.id,
+              email,
+            },
+          },
+          update: {},
+          create: {
+            userId: user.id,
+            email,
+          },
+        })
+      }
     }
 
     return user
@@ -139,6 +168,16 @@ export class AuthService {
         name,
       },
     })
+
+    // 初始化邮件白名单
+    if (email) {
+      await this.prisma.emailWhitelist.create({
+        data: {
+          userId: user.id,
+          email,
+        },
+      })
+    }
 
     return user
   }
