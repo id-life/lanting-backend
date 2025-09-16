@@ -52,14 +52,21 @@ export class AuthService {
         },
       })
 
-      // 初始化邮件白名单
+      // 初始化邮件白名单（静默处理冲突）
       if (email) {
-        await this.prisma.emailWhitelist.create({
-          data: {
-            userId: user.id,
-            email,
-          },
-        })
+        try {
+          await this.prisma.emailWhitelist.create({
+            data: {
+              userId: user.id,
+              email,
+            },
+          })
+        } catch (error) {
+          // 忽略唯一性约束冲突（邮箱已被其他用户使用）
+          if (error.code !== "P2002") {
+            throw error
+          }
+        }
       }
     } else {
       const originalEmail = user.email
@@ -74,21 +81,21 @@ export class AuthService {
         },
       })
 
-      // 只有当邮箱发生变化时才检查并添加到白名单
+      // 只有当邮箱发生变化时才检查并添加到白名单（静默处理冲突）
       if (email && email !== originalEmail) {
-        await this.prisma.emailWhitelist.upsert({
-          where: {
-            userId_email: {
+        try {
+          await this.prisma.emailWhitelist.create({
+            data: {
               userId: user.id,
               email,
             },
-          },
-          update: {},
-          create: {
-            userId: user.id,
-            email,
-          },
-        })
+          })
+        } catch (error) {
+          // 忽略唯一性约束冲突（邮箱已被其他用户使用）
+          if (error.code !== "P2002") {
+            throw error
+          }
+        }
       }
     }
 
@@ -169,14 +176,21 @@ export class AuthService {
       },
     })
 
-    // 初始化邮件白名单
+    // 初始化邮件白名单（静默处理冲突）
     if (email) {
-      await this.prisma.emailWhitelist.create({
-        data: {
-          userId: user.id,
-          email,
-        },
-      })
+      try {
+        await this.prisma.emailWhitelist.create({
+          data: {
+            userId: user.id,
+            email,
+          },
+        })
+      } catch (error) {
+        // 忽略唯一性约束冲突（邮箱已被其他用户使用）
+        if (error.code !== "P2002") {
+          throw error
+        }
+      }
     }
 
     return user
