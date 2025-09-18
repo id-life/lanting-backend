@@ -150,7 +150,7 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
     // 处理邮件内容的业务逻辑
   }
 
-  private async handleReconnect(config: any) {
+  private async handleReconnect(config: ImapFlowOptions) {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       this.logger.error(
         `Max reconnection attempts (${this.maxReconnectAttempts}) reached, giving up`,
