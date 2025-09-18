@@ -7,6 +7,12 @@ import {
 } from "@nestjs/common"
 import { ImapFlow, ImapFlowOptions } from "imapflow"
 import { Attachment, simpleParser } from "mailparser"
+import { AwsService } from "@/common/aws/aws.service"
+import {
+  MAX_FILE_SIZE,
+  SUPPORTED_FILE_EXTENSIONS,
+} from "@/common/constants/file-types"
+import { PrismaService } from "@/common/prisma/prisma.service"
 import { ConfigService } from "@/config/config.service"
 
 interface EmailInfo {
@@ -34,7 +40,11 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
     SPAM: "垃圾邮件",
   }
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly awsService: AwsService,
+    private readonly prismaService: PrismaService,
+  ) {}
 
   async onModuleInit() {
     this.logger.log("ImapflowService initializing...")
@@ -99,11 +109,34 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
       return
     }
 
-    const lock = await this.client.getMailboxLock(this.MAILBOXES.INBOX)
+    this.logger.log("Starting to check for unseen emails...")
+    const mailboxes = Object.values(this.MAILBOXES)
+
+    for (const mailbox of mailboxes) {
+      try {
+        await this.handleUnseenEmail(mailbox)
+      } catch (error) {
+        this.logger.error(
+          `Failed to handle unseen emails in ${mailbox}: ${error.message}`,
+        )
+      }
+    }
+    this.logger.log("Finished checking all mailboxes")
+  }
+
+  private async handleUnseenEmail(mailbox: string) {
+    if (!this.client) {
+      return
+    }
+
+    const lock = await this.client.getMailboxLock(mailbox)
 
     try {
       const unseenEmails = await this.client.search({ seen: false })
       if (unseenEmails && unseenEmails.length > 0) {
+        this.logger.log(
+          `Processing ${unseenEmails.length} unseen emails in ${mailbox}`,
+        )
         const messages = await this.client?.fetchAll(unseenEmails, {
           envelope: true,
           source: true,
@@ -116,6 +149,13 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
             // 使用 mailparser 解析邮件
             const emailInfo = await this.processEmail(source)
             await this.handleEmailContent(emailInfo)
+
+            // 处理完成后将邮件标记为已读
+            await this.markEmailAsRead(
+              message.uid,
+              emailInfo.from?.address,
+              mailbox,
+            )
           }
         }
       }
@@ -146,8 +186,165 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
     return emailInfo
   }
 
-  private async handleEmailContent(_emailInfo: EmailInfo) {
-    // 处理邮件内容的业务逻辑
+  private async handleEmailContent(emailInfo: EmailInfo) {
+    const senderEmail = emailInfo.from?.address?.toLowerCase().trim()
+
+    try {
+      if (!senderEmail) {
+        this.logger.warn("Email without sender address, skipping...")
+        return
+      }
+
+      // 检查发件人邮箱是否在白名单中
+      const whitelistEntry = await this.prismaService.emailWhitelist.findUnique(
+        {
+          where: { email: senderEmail },
+        },
+      )
+
+      if (!whitelistEntry) {
+        this.logger.warn(
+          `Email from ${senderEmail} not in whitelist, skipping...`,
+        )
+        return
+      }
+
+      // 处理邮件附件
+      if (emailInfo.attachments && emailInfo.attachments.length > 0) {
+        this.logger.log(
+          `Processing ${emailInfo.attachments.length} attachments from ${senderEmail}`,
+        )
+        await this.processEmailAttachments(emailInfo, senderEmail)
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error processing email content: ${error.message}`,
+        error.stack,
+      )
+    }
+  }
+
+  private async processEmailAttachments(
+    emailInfo: EmailInfo,
+    senderEmail: string,
+  ) {
+    if (!emailInfo.attachments) return
+
+    for (const attachment of emailInfo.attachments) {
+      try {
+        // 过滤无效附件
+        if (!attachment.content || !attachment.filename) {
+          this.logger.warn(
+            `Invalid attachment in email from ${senderEmail}, skipping...`,
+          )
+          continue
+        }
+
+        // 验证文件类型和大小
+        if (!this.validateAttachment(attachment, senderEmail)) {
+          continue
+        }
+
+        // 上传附件到 S3
+        const storageFilename = await this.uploadAttachmentToS3(attachment)
+
+        // 保存到待处理表
+        await this.prismaService.pendingArchiveOrig.create({
+          data: {
+            senderEmail,
+            messageId: emailInfo.messageId,
+            subject: emailInfo.subject,
+            originalFilename: attachment.filename,
+            storageUrl: storageFilename,
+            fileType:
+              attachment.filename?.split(".").pop()?.toLowerCase() || "bin",
+            status: "pending",
+          },
+        })
+
+        this.logger.log(
+          `Saved attachment ${attachment.filename} from ${senderEmail} to pending queue`,
+        )
+      } catch (error) {
+        this.logger.error(
+          `Error processing attachment ${attachment.filename} from ${senderEmail}: ${error.message}`,
+          error.stack,
+        )
+      }
+    }
+  }
+
+  /**
+   * 验证邮件附件的类型和大小
+   */
+  private validateAttachment(
+    attachment: Attachment,
+    senderEmail: string,
+  ): boolean {
+    const filename = attachment.filename || ""
+    const fileExtension = filename.split(".").pop()?.toLowerCase() || ""
+    const fileSize = attachment.content?.length || 0
+
+    // 检查文件大小
+    if (fileSize > MAX_FILE_SIZE) {
+      this.logger.warn(
+        `Attachment ${filename} from ${senderEmail} exceeds size limit (${fileSize} > ${MAX_FILE_SIZE})`,
+      )
+      return false
+    }
+
+    // 检查文件扩展名
+    const supportedExtensions = SUPPORTED_FILE_EXTENSIONS.map((ext) =>
+      ext.toLowerCase(),
+    )
+    if (!supportedExtensions.includes(`.${fileExtension}`)) {
+      this.logger.warn(
+        `Unsupported file extension .${fileExtension} for ${filename} from ${senderEmail}`,
+      )
+      return false
+    }
+
+    return true
+  }
+
+  /**
+   * 上传邮件附件到 S3
+   */
+  private async uploadAttachmentToS3(attachment: Attachment): Promise<string> {
+    const timestamp = Date.now()
+    const originalFilename = attachment.filename || "attachment"
+    const storageFilename = `email_${timestamp}_${originalFilename}`
+
+    const storagePath = await this.awsService.uploadPublicFile(
+      this.configService.awsS3Directory,
+      storageFilename,
+      attachment.content,
+    )
+
+    return storagePath.replace(`${this.configService.awsS3Directory}/`, "")
+  }
+
+  /**
+   * 将邮件标记为已读
+   */
+  private async markEmailAsRead(
+    uid?: number,
+    senderEmail?: string,
+    mailbox?: string,
+  ) {
+    if (!this.client || !uid) {
+      this.logger.warn("Cannot mark email as read: missing client or uid")
+      return
+    }
+
+    try {
+      // 注意：这里不需要重新获取锁，因为调用方已经持有了邮箱锁
+      await this.client.messageFlagsAdd(uid, ["\\Seen"], { uid: true })
+    } catch (error) {
+      this.logger.error(
+        `Failed to mark email as read (uid: ${uid}, sender: ${senderEmail}, mailbox: ${mailbox}): ${error.message}`,
+      )
+    }
   }
 
   private async handleReconnect(config: ImapFlowOptions) {
