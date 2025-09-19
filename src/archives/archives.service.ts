@@ -22,6 +22,7 @@ import {
   ICreateArchive,
 } from "./dto/create-archive.dto"
 import { CreateCommentDto } from "./dto/create-comment.dto"
+import { QueryPendingOrigsDto } from "./dto/query-pending-origs.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 import { UpdateCommentDto } from "./dto/update-comment.dto"
 import { ArchiveWithRelations } from "./types"
@@ -1761,6 +1762,58 @@ export class ArchivesService {
       return result
     } catch (error) {
       this.handleError(error, "get search keywords")
+    }
+  }
+
+  async findPendingOrigs(queryDto: QueryPendingOrigsDto, userId: string) {
+    try {
+      const { status = "pending" } = queryDto
+
+      // 获取用户的邮箱白名单
+      const userWhitelist = await this.prismaService.emailWhitelist.findMany({
+        where: { userId },
+        select: { email: true },
+      })
+
+      // 提取邮箱地址数组
+      const whitelistEmails = userWhitelist.map((item) => item.email)
+
+      // 如果用户没有邮箱白名单，返回空数据
+      if (whitelistEmails.length === 0) {
+        return {
+          success: true,
+          data: [],
+          message: "No email whitelist found for user",
+        }
+      }
+
+      const pendingOrigs = await this.prismaService.pendingArchiveOrig.findMany(
+        {
+          where: {
+            status,
+            senderEmail: { in: whitelistEmails },
+          },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            senderEmail: true,
+            messageId: true,
+            subject: true,
+            originalFilename: true,
+            storageUrl: true,
+            fileType: true,
+            status: true,
+          },
+        },
+      )
+
+      return {
+        success: true,
+        data: pendingOrigs,
+        message: "Pending archive origs retrieved successfully",
+      }
+    } catch (error) {
+      this.handleError(error, "fetch pending origs")
     }
   }
 }

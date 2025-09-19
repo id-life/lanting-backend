@@ -209,7 +209,7 @@ model PendingArchiveOrig {
   originalFilename String @map("original_filename") @db.VarChar(255) // 附件原始文件名
   storageUrl   String   @map("storage_url") @db.VarChar(500) // AWS S3存储地址
   fileType     String?  @map("file_type") @db.VarChar(20) // 文件扩展名
-  status       String   @default("pending") @db.VarChar(20) // pending, archived, failed
+  status       String   @default("pending") @db.VarChar(20) // pending, archived
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

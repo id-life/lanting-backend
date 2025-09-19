@@ -37,6 +37,7 @@ import { CreateArchiveDto } from "./dto/create-archive.dto"
 import { CreateCommentDto } from "./dto/create-comment.dto"
 import { ArchiveFileUploadDto } from "./dto/file-upload.dto"
 import { LikeArchiveDto } from "./dto/like-archive.dto"
+import { QueryPendingOrigsDto } from "./dto/query-pending-origs.dto"
 import { SearchKeywordDto } from "./dto/search-keyword.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 import { UpdateCommentDto } from "./dto/update-comment.dto"
@@ -651,6 +652,60 @@ export class ArchivesController {
   @UsePipes(new ValidationPipe({ transform: true }))
   recordSearchKeyword(@Body() searchKeywordDto: SearchKeywordDto) {
     return this.archivesService.recordSearchKeyword(searchKeywordDto.keyword)
+  }
+
+  @Get("pending-origs")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "获取待处理的邮件附件列表" })
+  @ApiQuery({
+    name: "status",
+    required: false,
+    enum: ["pending", "archived"],
+    description: "状态筛选，默认为 pending",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "返回待处理的邮件附件列表",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "number", example: 1 },
+              senderEmail: { type: "string", example: "user@example.com" },
+              messageId: {
+                type: "string",
+                example: "<message-id@example.com>",
+              },
+              subject: { type: "string", example: "邮件主题" },
+              originalFilename: { type: "string", example: "document.pdf" },
+              storageUrl: {
+                type: "string",
+                example: "aws_hash.pdf",
+              },
+              fileType: { type: "string", example: "pdf" },
+              status: { type: "string", example: "pending" },
+            },
+          },
+        },
+        message: {
+          type: "string",
+          example: "Pending archive origs retrieved successfully",
+        },
+      },
+    },
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  getPendingOrigs(
+    @Query() queryDto: QueryPendingOrigsDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.archivesService.findPendingOrigs(queryDto, user.id)
   }
 
   @Get("content/:storageUrl")
