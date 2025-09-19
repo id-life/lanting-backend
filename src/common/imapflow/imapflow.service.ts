@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common"
-import { ImapFlow, ImapFlowOptions } from "imapflow"
+import { ImapFlow, ImapFlowOptions, MailboxLockObject } from "imapflow"
 import { Attachment, simpleParser } from "mailparser"
 import { AwsService } from "@/common/aws/aws.service"
 import {
@@ -39,6 +39,8 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
     INBOX: "INBOX",
     SPAM: "垃圾邮件",
   }
+
+  private mailboxLock: MailboxLockObject | null = null
 
   constructor(
     private readonly configService: ConfigService,
@@ -98,9 +100,32 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
       this.reconnectAttempts = 0 // 重置重连计数器
 
       await this.handleUnseenEmails()
+
+      // 设置实时邮件监听
+      await this.setupRealtimeEmailListener()
     } catch (error) {
       this.logger.error("Failed to connect to email server", error)
       await this.handleReconnect(config)
+    }
+  }
+
+  private async setupRealtimeEmailListener() {
+    if (!this.client) {
+      return
+    }
+
+    try {
+      this.logger.log("Setting up real-time email listener...")
+      this.mailboxLock = await this.client.getMailboxLock(this.MAILBOXES.INBOX)
+
+      this.client.on("exists", (data) => {
+        this.logger.log(`New messages detected in ${data.path}: ${data.count}`)
+        this.handleUnseenEmail(this.MAILBOXES.INBOX)
+      })
+
+      this.logger.log("Real-time email listener setup completed")
+    } catch (error) {
+      this.logger.error("Failed to setup real-time email listener", error)
     }
   }
 
@@ -114,53 +139,51 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
 
     for (const mailbox of mailboxes) {
       try {
+        this.mailboxLock = await this.client.getMailboxLock(mailbox)
         await this.handleUnseenEmail(mailbox)
       } catch (error) {
         this.logger.error(
           `Failed to handle unseen emails in ${mailbox}: ${error.message}`,
         )
+      } finally {
+        this.mailboxLock?.release()
       }
     }
     this.logger.log("Finished checking all mailboxes")
   }
 
+  // 调用这个方法前需要手动获取 mailboxLock
   private async handleUnseenEmail(mailbox: string) {
     if (!this.client) {
       return
     }
 
-    const lock = await this.client.getMailboxLock(mailbox)
+    const unseenEmails = await this.client.search({ seen: false })
+    if (unseenEmails && unseenEmails.length > 0) {
+      this.logger.log(
+        `Processing ${unseenEmails.length} unseen emails in ${mailbox}`,
+      )
+      const messages = await this.client?.fetchAll(unseenEmails, {
+        envelope: true,
+        source: true,
+      })
 
-    try {
-      const unseenEmails = await this.client.search({ seen: false })
-      if (unseenEmails && unseenEmails.length > 0) {
-        this.logger.log(
-          `Processing ${unseenEmails.length} unseen emails in ${mailbox}`,
-        )
-        const messages = await this.client?.fetchAll(unseenEmails, {
-          envelope: true,
-          source: true,
-        })
+      for (const message of messages) {
+        const source = message.source
 
-        for (const message of messages) {
-          const source = message.source
+        if (source) {
+          // 使用 mailparser 解析邮件
+          const emailInfo = await this.processEmail(source)
+          await this.handleEmailContent(emailInfo)
 
-          if (source) {
-            // 使用 mailparser 解析邮件
-            const emailInfo = await this.processEmail(source)
-            await this.handleEmailContent(emailInfo)
-
-            // 处理完成后将邮件标记为已读
-            await this.markEmailAsRead(
-              message.uid,
-              emailInfo.from?.address,
-              mailbox,
-            )
-          }
+          // 处理完成后将邮件标记为已读
+          await this.markEmailAsRead(
+            message.uid,
+            emailInfo.from?.address,
+            mailbox,
+          )
         }
       }
-    } finally {
-      lock?.release()
     }
   }
 
