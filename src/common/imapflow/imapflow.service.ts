@@ -5,7 +5,13 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common"
-import { ImapFlow, ImapFlowOptions, MailboxLockObject } from "imapflow"
+import { Cron, CronExpression } from "@nestjs/schedule"
+import {
+  ExistsEvent,
+  ImapFlow,
+  ImapFlowOptions,
+  MailboxLockObject,
+} from "imapflow"
 import { Attachment, simpleParser } from "mailparser"
 import { AwsService } from "@/common/aws/aws.service"
 import {
@@ -118,15 +124,23 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
       this.logger.log("Setting up real-time email listener...")
       this.mailboxLock = await this.client.getMailboxLock(this.MAILBOXES.INBOX)
 
-      this.client.on("exists", (data) => {
-        this.logger.log(`New messages detected in ${data.path}: ${data.count}`)
-        this.handleUnseenEmail(this.MAILBOXES.INBOX)
-      })
+      this.client.on("exists", this.existsEventListener)
 
       this.logger.log("Real-time email listener setup completed")
     } catch (error) {
       this.logger.error("Failed to setup real-time email listener", error)
     }
+  }
+
+  private existsEventListener: (data: ExistsEvent) => void = () => {
+    this.logger.log(
+      `Handling realtime unseen emails in ${this.MAILBOXES.INBOX}...`,
+    )
+    this.handleUnseenEmail(this.MAILBOXES.INBOX).then(() => {
+      this.logger.log(
+        `Finished handling realtime unseen emails in ${this.MAILBOXES.INBOX}`,
+      )
+    })
   }
 
   private async handleUnseenEmails() {
@@ -389,6 +403,37 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
 
     // 指数退避：每次重连间隔增加
     this.reconnectInterval = Math.min(this.reconnectInterval * 1.5, 30000) // 最大30秒
+  }
+
+  /**
+   * 定时检查垃圾邮件文件夹中的新邮件
+   * 每5分钟执行一次
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async checkSpamEmails() {
+    if (!this.client) {
+      return
+    }
+
+    this.logger.log("Starting scheduled spam email check...")
+
+    try {
+      // 释放之前的锁和事件监听器
+      this.mailboxLock?.release()
+      this.client.off("exists", this.existsEventListener)
+
+      this.mailboxLock = await this.client.getMailboxLock(this.MAILBOXES.SPAM)
+      await this.handleUnseenEmail(this.MAILBOXES.SPAM)
+      this.logger.log("Spam email check completed successfully")
+    } catch (error) {
+      this.logger.error(
+        `Error during spam email check: ${error.message}`,
+        error.stack,
+      )
+    } finally {
+      this.mailboxLock?.release()
+      this.setupRealtimeEmailListener()
+    }
   }
 
   private async disconnect() {

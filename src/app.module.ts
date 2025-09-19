@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common"
+import { ScheduleModule } from "@nestjs/schedule"
 import { AppController } from "./app.controller"
 import { AppService } from "./app.service"
 import { ArchivesModule } from "./archives/archives.module"
@@ -11,6 +12,7 @@ import { TributeModule } from "./tribute/tribute.module"
 @Module({
   imports: [
     ConfigModule,
+    ScheduleModule.forRoot(),
     ArchivesModule,
     TributeModule,
     CommonModule,
