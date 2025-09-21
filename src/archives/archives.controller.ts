@@ -27,6 +27,7 @@ import {
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger"
+import { User } from "@prisma/client"
 import { Request, Response } from "express"
 import { CurrentUser } from "@/auth/decorators/user.decorator"
 import { JwtAuthGuard } from "@/auth/guards/jwt-auth.guard"
@@ -56,7 +57,7 @@ export class ArchivesController {
   @ApiOperation({
     summary: "创建新归档",
     description:
-      "支持多文件上传，每个文件可以关联一个可选的原始URL。支持三种模式：1) 纯文件上传 2) 文件+对应原始URL 3) 仅通过原始URL抓取内容",
+      "支持多文件上传，每个文件可以关联一个可选的原始URL。支持四种模式：1) 纯文件上传 2) 文件+对应原始URL 3) 仅通过原始URL抓取内容 4) 使用已上传的待处理文件",
   })
   @ApiResponse({
     status: 201,
@@ -247,7 +248,7 @@ export class ArchivesController {
         message: {
           type: "string",
           example:
-            "At least one of the following must be provided: files (for file upload) or originalUrls (for URL fetching)",
+            "At least one of the following must be provided: files (for file upload), originalUrls (for URL fetching), or pendingOrigIds (for pending files)",
         },
       },
     },
@@ -316,8 +317,41 @@ export class ArchivesController {
           ],
         },
       },
+      "pending-files-only": {
+        summary: "纯待处理文件模式",
+        description: "只使用已上传到AWS的待处理文件创建归档",
+        value: {
+          title: "邮件附件归档",
+          chapter: "列传",
+          authors: ["邮件发送者"],
+          publisher: "邮件系统",
+          date: "2025-07-23",
+          tags: ["邮件附件", "待处理文件"],
+          remarks: "使用邮件系统预处理的文件创建归档",
+          pendingOrigIds: [123, 456, 789], // 使用待处理文件ID
+          originalUrls: ["", "", ""], // 对应位置留空
+          // files: 无需上传新文件
+        },
+      },
+      "mixed-with-pending": {
+        summary: "包含待处理文件的混合模式",
+        description: "待处理文件与新上传文件、URL抓取的完整混合模式",
+        value: {
+          title: "混合内容归档：待处理+新上传+URL抓取",
+          chapter: "群像",
+          authors: ["混合作者1", "混合作者2", "邮件作者"],
+          publisher: "综合平台",
+          date: "2025-07-23",
+          tags: ["混合模式", "待处理文件", "新上传", "URL抓取"],
+          remarks:
+            "演示完整混合模式：位置0=待处理文件，位置1=URL抓取，位置2=新上传文件，位置3=待处理文件",
+          pendingOrigIds: [123, null, null, 456], // 位置0和3使用待处理文件
+          originalUrls: ["", "https://example.com/online-content", "", ""], // 位置1 URL抓取
+          // files[2]: 位置2上传新文件
+        },
+      },
       "mixed-mode": {
-        summary: "混合模式",
+        summary: "传统混合模式",
         description:
           "支持文件与URL的灵活组合：可以只有文件、只有URL、或两者都有。按索引位置一一对应。",
         value: {
@@ -328,13 +362,14 @@ export class ArchivesController {
           date: "2025-07-23",
           tags: ["混合模式", "本地文件", "在线资源", "综合归档"],
           remarks:
-            "演示混合模式：位置0=URL抓取，位置1=本地文件+URL，位置2=仅本地文件，位置3=仅URL抓取",
+            "演示传统混合模式：位置0=URL抓取，位置1=本地文件+URL，位置2=仅本地文件，位置3=仅URL抓取",
           originalUrls: [
             "https://example.com/online-only", // 位置0: 仅URL，无文件上传
             "https://example.com/with-backup", // 位置1: 有URL也有文件上传
             "", // 位置2: 仅文件上传，无URL
             "https://example.com/another-online", // 位置3: 仅URL，无文件上传
           ],
+          pendingOrigIds: [null, null, null, null], // 不使用待处理文件
           // 对应的files上传：
           // files[0]: 无（仅URL抓取）
           // files[1]: 有文件（本地备份，同时保留原始URL）
@@ -377,6 +412,7 @@ export class ArchivesController {
           title: "纯净归档示例",
           chapter: "游侠",
           originalUrls: ["https://example.com/simple-content"],
+          pendingOrigIds: [null], // 对应位置不使用待处理文件
         },
       },
       "max-fields": {
@@ -424,6 +460,7 @@ export class ArchivesController {
             "https://company.example.com/testing-strategy",
             "https://company.example.com/deployment-guide",
           ],
+          pendingOrigIds: [null, null, null, null, null], // 不使用待处理文件
           // files: "对应5个文件：架构指南.pdf、组件库文档.html、性能优化手册.md、测试策略.docx、部署指南.txt"
         },
       },
@@ -441,13 +478,13 @@ export class ArchivesController {
   @UseInterceptors(FilesInterceptor("files", 10, multerConfig)) // 支持最多10个文件上传，每个文件可关联originalUrl
   create(
     @Body() createArchiveDto: CreateArchiveDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: User,
     @Req() req: Request,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
     const userAgent =
       req.headers["user-agent"] || this.configService.fallbackUserAgent
-    return this.archivesService.create(createArchiveDto, userAgent, files)
+    return this.archivesService.create(createArchiveDto, user, userAgent, files)
   }
 
   @Get()

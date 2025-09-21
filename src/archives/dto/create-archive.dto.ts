@@ -110,14 +110,37 @@ export class CreateArchiveDto {
   @IsString({ each: true })
   @Transform(({ value }) => {
     if (typeof value === "string") {
-      return value
-        .split(",")
-        .map((url) => url.trim())
-        .filter((url) => url)
+      return value.split(",").map((url) => url.trim())
     }
     return value
   })
   originalUrls?: string[]
+
+  @ApiProperty({
+    description:
+      "待处理文件ID列表（可选）。按索引位置与files和originalUrls数组对应，每个位置可以是文件ID或null。用于选择已上传到AWS的待处理文件。",
+    required: false,
+    type: "array",
+    items: {
+      type: "number",
+      nullable: true,
+    },
+    example: [123, null, 456, null], // 位置0和2使用待处理文件，位置1和3为其他方式
+  })
+  @IsOptional()
+  @IsArray()
+  @Transform(({ value }) => {
+    if (typeof value === "string") {
+      return value.split(",").map((id) => {
+        const trimmed = id.trim()
+        return trimmed === "" || trimmed === "null"
+          ? null
+          : Number.parseInt(trimmed, 10)
+      })
+    }
+    return value
+  })
+  pendingOrigIds?: (number | null)[]
 
   @ApiHideProperty()
   @IsOptional()
@@ -133,6 +156,7 @@ export interface ICreateArchive {
   tags?: string[]
   remarks?: string
   originalUrls?: string[]
+  pendingOrigIds?: (number | null)[]
   archiveFilename?: string
   fileType?: string
 }
@@ -140,5 +164,6 @@ export interface ICreateArchive {
 export interface FileProcessingItem {
   file?: Express.Multer.File
   originalUrl?: string
+  pendingOrigId?: number | null
   fileIndex: number
 }
