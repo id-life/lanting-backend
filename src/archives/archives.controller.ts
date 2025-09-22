@@ -1148,13 +1148,19 @@ export class ArchivesController {
   update(
     @Param("id", ParseIntPipe) id: number,
     @Body() updateArchiveDto: UpdateArchiveDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: User,
     @Req() req: Request,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
     const userAgent =
       req.headers["user-agent"] || this.configService.fallbackUserAgent
-    return this.archivesService.update(id, updateArchiveDto, userAgent, files)
+    return this.archivesService.update(
+      id,
+      updateArchiveDto,
+      user,
+      userAgent,
+      files,
+    )
   }
 
   @Delete(":id")
