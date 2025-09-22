@@ -719,13 +719,152 @@ export class ArchivesService {
   }
 
   /**
+   * 标准化前端通过 multipart/form-data 传入的 files 字段
+   * 可能是字符串、字符串数组或 JSON 字符串，需保留索引顺序
+   */
+  private normalizeBodyFilesInput(filesField?: any): string[] {
+    const normalizeValue = (value: unknown): string => {
+      if (typeof value !== "string") {
+        return ""
+      }
+
+      const trimmed = value.trim()
+      if (trimmed === "null" || trimmed === "undefined") {
+        return ""
+      }
+
+      return trimmed
+    }
+
+    if (filesField === undefined || filesField === null) {
+      return []
+    }
+
+    if (Array.isArray(filesField)) {
+      return filesField.map((value) => normalizeValue(value))
+    }
+
+    if (typeof filesField === "string") {
+      const trimmed = normalizeValue(filesField)
+
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed)
+          if (Array.isArray(parsed)) {
+            return parsed.map((value) => normalizeValue(value))
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Failed to parse files field as JSON array: ${error.message}`,
+          )
+        }
+      }
+
+      return [trimmed]
+    }
+
+    return []
+  }
+
+  /**
+   * 将 DTO 中的 storageUrl 字符串与真实上传文件合并，形成按索引排列的混合数组
+   */
+  private buildMixedFileInputsForUpdate(
+    dtoFiles: any,
+    uploadedFiles: Express.Multer.File[] | undefined,
+    existingOrigs: Array<{ storageUrl: string | null }> = [],
+    originalUrls?: string[],
+    pendingOrigIds?: (number | null)[],
+  ): Array<Express.Multer.File | string | undefined> {
+    const normalizedEntries = this.normalizeBodyFilesInput(dtoFiles).map(
+      (value) => ({
+        value,
+        consumed: false,
+      }),
+    )
+
+    const uploadQueue = uploadedFiles ? [...uploadedFiles] : []
+    const result: Array<Express.Multer.File | string | undefined> = []
+
+    const findEntry = (
+      predicate: (entry: { value: string; consumed: boolean }) => boolean,
+    ) => normalizedEntries.find((entry) => !entry.consumed && predicate(entry))
+
+    for (let index = 0; index < existingOrigs.length; index++) {
+      const existingStorage = existingOrigs[index]?.storageUrl?.trim()
+
+      if (existingStorage) {
+        const matchedEntry = findEntry(
+          (entry) => entry.value === existingStorage,
+        )
+        if (matchedEntry) {
+          matchedEntry.consumed = true
+          result[index] = existingStorage
+          continue
+        }
+      }
+
+      const placeholderEntry = findEntry((entry) => entry.value === "")
+
+      if (placeholderEntry) {
+        placeholderEntry.consumed = true
+        if (uploadQueue.length > 0) {
+          result[index] = uploadQueue.shift()
+        } else {
+          result[index] = undefined
+        }
+        continue
+      }
+
+      if (uploadQueue.length > 0) {
+        result[index] = uploadQueue.shift()
+      } else {
+        result[index] = undefined
+      }
+    }
+
+    for (const entry of normalizedEntries) {
+      if (entry.consumed) {
+        continue
+      }
+
+      if (entry.value === "") {
+        if (uploadQueue.length > 0) {
+          result.push(uploadQueue.shift())
+        } else {
+          result.push(undefined)
+        }
+      } else {
+        result.push(entry.value)
+      }
+    }
+
+    while (uploadQueue.length > 0) {
+      result.push(uploadQueue.shift())
+    }
+
+    const expectedLength = Math.max(
+      result.length,
+      originalUrls?.length || 0,
+      pendingOrigIds?.length || 0,
+      existingOrigs.length,
+    )
+
+    while (result.length < expectedLength) {
+      result.push(undefined)
+    }
+
+    return result
+  }
+
+  /**
    * 预处理文件操作，在事务外部执行耗时操作
    * 优化：先比较新请求与现有记录，只处理不一致的项
    */
   private async prepareFileOperationsForUpdate(
     archiveId: number,
     userAgent: string,
-    files?: (Express.Multer.File | string)[],
+    files?: Array<Express.Multer.File | string | undefined>,
     originalUrls?: string[],
     pendingOrigIds?: (number | null)[],
     allowedPendingSenderEmails: string[] = [],
@@ -1502,7 +1641,10 @@ export class ArchivesService {
       // 验证章节类别（更新时可选但如果提供必须有效）
       this.validateChapter(updateArchiveDto.chapter)
 
-      await this.findOne(id, false)
+      const existingArchiveResponse = (await this.findOne(id, false)) as {
+        data?: { origs?: Array<{ storageUrl: string | null }> }
+      }
+      const existingOrigsForOrder = existingArchiveResponse?.data?.origs || []
 
       // 预处理文件操作（在事务外部执行耗时操作）
       // 将 Express.Multer.File[] 转换为 (Express.Multer.File | string)[] 类型
@@ -1526,10 +1668,18 @@ export class ArchivesService {
         }
       }
 
+      const mixedFileInputs = this.buildMixedFileInputsForUpdate(
+        updateArchiveDto.files,
+        files,
+        existingOrigsForOrder,
+        updateArchiveDto.originalUrls,
+        updateArchiveDto.pendingOrigIds,
+      )
+
       const fileOperations = await this.prepareFileOperationsForUpdate(
         id,
         userAgent,
-        files as (Express.Multer.File | string)[] | undefined,
+        mixedFileInputs,
         updateArchiveDto.originalUrls,
         updateArchiveDto.pendingOrigIds,
         allowedPendingSenderEmails,
