@@ -167,3 +167,54 @@ model SearchKeyword {
   @@index([searchCount(sort: Desc)])
   @@map("search_keywords")
 }
+
+model User {
+  id           String   @id @default(cuid())
+  githubId     String?  @unique // GitHub user ID (optional for local users)
+  username     String   @unique // Username (required for both GitHub and local users)
+  email        String? // Email (optional)
+  avatar       String? // Avatar URL
+  name         String? // Display name
+  password     String? // Password hash (for local authentication)
+  githubSecret String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  emailWhitelists EmailWhitelist[]
+
+  @@index([githubId])
+  @@index([username])
+  @@map("users")
+}
+
+model EmailWhitelist {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  userId    String   @map("user_id")
+  email     String   @unique @db.VarChar(255) // 全局唯一邮箱地址
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([email])
+  @@map("email_whitelists")
+}
+
+model PendingArchiveOrig {
+  id           Int      @id @default(autoincrement()) @db.UnsignedInt
+  senderEmail  String   @map("sender_email") @db.VarChar(255)
+  messageId    String?  @map("message_id") @db.VarChar(255) // 邮件唯一标识，用于去重
+  subject      String?  @db.VarChar(500)
+  originalFilename String @map("original_filename") @db.VarChar(255) // 附件原始文件名
+  storageUrl   String   @map("storage_url") @db.VarChar(500) // AWS S3存储地址
+  fileType     String?  @map("file_type") @db.VarChar(20) // 文件扩展名
+  status       String   @default("pending") @db.VarChar(20) // pending, archived
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([senderEmail])
+  @@index([status])
+  @@index([messageId])
+  @@map("pending_archive_origs")
+}
