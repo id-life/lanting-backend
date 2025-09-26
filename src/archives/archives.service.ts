@@ -9,6 +9,7 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common"
+import { User } from "@prisma/client"
 import { Cache } from "cache-manager"
 import { execa } from "execa"
 import { lookup } from "mime-types"
@@ -22,6 +23,7 @@ import {
   ICreateArchive,
 } from "./dto/create-archive.dto"
 import { CreateCommentDto } from "./dto/create-comment.dto"
+import { QueryPendingOrigsDto } from "./dto/query-pending-origs.dto"
 import { UpdateArchiveDto } from "./dto/update-archive.dto"
 import { UpdateCommentDto } from "./dto/update-comment.dto"
 import { ArchiveWithRelations } from "./types"
@@ -34,6 +36,7 @@ interface FileOperationResult {
     storageUrl: string
     fileType?: string
     storageType: string
+    pendingOrigId?: number
   }
   existingFileId?: number
 }
@@ -81,6 +84,15 @@ export class ArchivesService {
     return getValidChapters()
   }
 
+  private async getUserWhitelistEmails(userId: string): Promise<string[]> {
+    const whitelist = await this.prismaService.emailWhitelist.findMany({
+      where: { userId },
+      select: { email: true },
+    })
+
+    return whitelist.map((item) => item.email)
+  }
+
   private handleError(error: any, operation: string) {
     const errorResponse = {
       success: false,
@@ -106,31 +118,122 @@ export class ArchivesService {
   }
 
   /**
-   * 处理文件和URL的混合模式，生成文件处理项目数组
+   * 处理文件、URL和待处理文件的混合模式，生成文件处理项目数组
    */
   private prepareFileProcessingItems(
     files?: Express.Multer.File[],
     originalUrls?: string[],
+    pendingOrigIds?: (number | null)[],
   ): FileProcessingItem[] {
+    const uploadedFiles = files ? [...files] : []
+
+    const slotCount = Math.max(
+      originalUrls?.length || 0,
+      pendingOrigIds?.length || 0,
+      uploadedFiles.length,
+    )
+
+    if (slotCount === 0) {
+      return uploadedFiles.map((file, index) => ({
+        file,
+        fileIndex: index,
+      }))
+    }
+
+    // 保留与前端槽位一致的原始URL数组（空字符串表示该位置没有URL）
+    const normalizedOriginalUrls = Array.from(
+      { length: slotCount },
+      (_, index) => {
+        const url = originalUrls?.[index]
+        return typeof url === "string" ? url : ""
+      },
+    )
+
+    const normalizedPendingIds = Array.from(
+      { length: slotCount },
+      (_, index) => {
+        const pendingId = pendingOrigIds?.[index]
+        return typeof pendingId === "number" ? pendingId : null
+      },
+    )
+
+    const requiredFileIndexes: number[] = []
+    const optionalFileIndexes: number[] = []
+
+    for (let index = 0; index < slotCount; index++) {
+      const pendingId = normalizedPendingIds[index]
+      if (typeof pendingId === "number") {
+        continue
+      }
+
+      const hasUrl = normalizedOriginalUrls[index]?.trim()
+      if (!hasUrl) {
+        requiredFileIndexes.push(index)
+      } else {
+        optionalFileIndexes.push(index)
+      }
+    }
+
+    if (uploadedFiles.length < requiredFileIndexes.length) {
+      throw new BadRequestException({
+        success: false,
+        data: null,
+        message:
+          "Missing uploaded files for slots that require file content. Please review files/originalUrls/pendingOrigIds alignment.",
+      })
+    }
+
+    const fileAssignments: (Express.Multer.File | undefined)[] = Array.from(
+      { length: slotCount },
+      () => undefined,
+    )
+
+    let filePointer = 0
+
+    for (const index of requiredFileIndexes) {
+      fileAssignments[index] = uploadedFiles[filePointer++]
+    }
+
+    for (const index of optionalFileIndexes) {
+      if (filePointer >= uploadedFiles.length) {
+        break
+      }
+      fileAssignments[index] = uploadedFiles[filePointer++]
+    }
+
+    if (filePointer < uploadedFiles.length) {
+      throw new BadRequestException({
+        success: false,
+        data: null,
+        message:
+          "Uploaded files exceed the available slots defined by originalUrls and pendingOrigIds.",
+      })
+    }
+
     const fileProcessingItems: FileProcessingItem[] = []
 
-    // 计算最大长度，支持混合模式
-    const maxLength = Math.max(files?.length || 0, originalUrls?.length || 0)
+    for (let index = 0; index < slotCount; index++) {
+      const file = fileAssignments[index]
+      const rawOriginalUrl = normalizedOriginalUrls[index]
+      const trimmedOriginalUrl = rawOriginalUrl.trim()
+      const pendingOrigId = normalizedPendingIds[index]
 
-    // 统一处理所有位置的文件/URL，支持混合模式
-    for (let index = 0; index < maxLength; index++) {
-      const file = files?.[index]
-      const originalUrl = originalUrls?.[index]
-
-      // 跳过完全空的位置（既没有文件也没有URL）
-      if (!file && (!originalUrl || !originalUrl.trim())) {
+      if (
+        !file &&
+        (!trimmedOriginalUrl || trimmedOriginalUrl.length === 0) &&
+        typeof pendingOrigId !== "number"
+      ) {
         continue
       }
 
       fileProcessingItems.push({
         file: file || undefined,
         originalUrl:
-          originalUrl && originalUrl.trim() ? originalUrl.trim() : undefined,
+          trimmedOriginalUrl && trimmedOriginalUrl.length > 0
+            ? trimmedOriginalUrl
+            : undefined,
+        pendingOrigId:
+          typeof pendingOrigId === "number" ? pendingOrigId : undefined,
         fileIndex: index,
       })
     }
@@ -258,32 +361,66 @@ export class ArchivesService {
     chapter?: string,
     tags?: string[],
     remarks?: string,
+    allowedPendingSenderEmails: string[] = [],
   ): Promise<
     Array<{
-      content: Buffer
+      content?: Buffer
       filename: string
       fileType?: string
-      originalUrl?: string
+      originalUrl?: string | null
+      pendingOrigId?: number
     }>
   > {
     const processedFiles: Array<{
-      content: Buffer
+      content?: Buffer
       filename: string
       fileType?: string
-      originalUrl?: string
+      originalUrl?: string | null
+      pendingOrigId?: number
     }> = []
 
     for (const item of fileProcessingItems) {
-      let fileContent: Buffer
+      let fileContent: Buffer | undefined
       let fileType: string | undefined
       let filename: string
+      let originalUrl: string | null | undefined
 
-      if (item.file) {
+      if (typeof item.pendingOrigId === "number") {
+        if (allowedPendingSenderEmails.length === 0) {
+          throw new BadRequestException({
+            success: false,
+            data: null,
+            message: "User is not authorized to use pending files",
+          })
+        }
+
+        const pendingOrig =
+          await this.prismaService.pendingArchiveOrig.findFirst({
+            where: {
+              id: item.pendingOrigId,
+              status: "pending",
+              senderEmail: { in: allowedPendingSenderEmails },
+            },
+          })
+
+        if (!pendingOrig) {
+          throw new BadRequestException({
+            success: false,
+            data: null,
+            message: `Pending file with ID ${item.pendingOrigId} is not available`,
+          })
+        }
+
+        filename = pendingOrig.storageUrl
+        fileType = pendingOrig.fileType || undefined
+        originalUrl = null // 待处理文件不需要原始URL
+      } else if (item.file) {
         // 处理上传的文件
         const fileExt = extname(item.file.originalname).toLowerCase()
         fileType = fileExt.substring(1)
         fileContent = item.file.buffer
         filename = `${titlePrefix}_${item.fileIndex}_${Date.now()}${fileExt}`
+        originalUrl = item.originalUrl
       } else if (item.originalUrl) {
         // 处理URL
         const urlResult = await this.fetchUrlContent(
@@ -300,17 +437,23 @@ export class ArchivesService {
         fileContent = urlResult.content
         fileType = urlResult.fileType
         filename = `${titlePrefix}_${item.fileIndex}_${Date.now()}.html`
+        originalUrl = item.originalUrl
       } else {
         continue // 跳过无效项目
       }
 
-      const storageFilename = await this.uploadFileToS3(filename, fileContent)
+      // 只有新上传的文件和URL抓取的内容需要上传到S3
+      if (fileContent) {
+        const storageFilename = await this.uploadFileToS3(filename, fileContent)
+        filename = storageFilename
+      }
 
       processedFiles.push({
         content: fileContent,
-        filename: storageFilename,
+        filename,
         fileType,
-        originalUrl: item.originalUrl,
+        originalUrl,
+        pendingOrigId: item.pendingOrigId || undefined,
       })
     }
 
@@ -576,14 +719,155 @@ export class ArchivesService {
   }
 
   /**
+   * 标准化前端通过 multipart/form-data 传入的 files 字段
+   * 可能是字符串、字符串数组或 JSON 字符串，需保留索引顺序
+   */
+  private normalizeBodyFilesInput(filesField?: any): string[] {
+    const normalizeValue = (value: unknown): string => {
+      if (typeof value !== "string") {
+        return ""
+      }
+
+      const trimmed = value.trim()
+      if (trimmed === "null" || trimmed === "undefined") {
+        return ""
+      }
+
+      return trimmed
+    }
+
+    if (filesField === undefined || filesField === null) {
+      return []
+    }
+
+    if (Array.isArray(filesField)) {
+      return filesField.map((value) => normalizeValue(value))
+    }
+
+    if (typeof filesField === "string") {
+      const trimmed = normalizeValue(filesField)
+
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed)
+          if (Array.isArray(parsed)) {
+            return parsed.map((value) => normalizeValue(value))
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Failed to parse files field as JSON array: ${error.message}`,
+          )
+        }
+      }
+
+      return [trimmed]
+    }
+
+    return []
+  }
+
+  /**
+   * 将 DTO 中的 storageUrl 字符串与真实上传文件合并，形成按索引排列的混合数组
+   */
+  private buildMixedFileInputsForUpdate(
+    dtoFiles: any,
+    uploadedFiles: Express.Multer.File[] | undefined,
+    existingOrigs: Array<{ storageUrl: string | null }> = [],
+    originalUrls?: string[],
+    pendingOrigIds?: (number | null)[],
+  ): Array<Express.Multer.File | string | undefined> {
+    const normalizedEntries = this.normalizeBodyFilesInput(dtoFiles).map(
+      (value) => ({
+        value,
+        consumed: false,
+      }),
+    )
+
+    const uploadQueue = uploadedFiles ? [...uploadedFiles] : []
+    const result: Array<Express.Multer.File | string | undefined> = []
+
+    const findEntry = (
+      predicate: (entry: { value: string; consumed: boolean }) => boolean,
+    ) => normalizedEntries.find((entry) => !entry.consumed && predicate(entry))
+
+    for (let index = 0; index < existingOrigs.length; index++) {
+      const existingStorage = existingOrigs[index]?.storageUrl?.trim()
+
+      if (existingStorage) {
+        const matchedEntry = findEntry(
+          (entry) => entry.value === existingStorage,
+        )
+        if (matchedEntry) {
+          matchedEntry.consumed = true
+          result[index] = existingStorage
+          continue
+        }
+      }
+
+      const placeholderEntry = findEntry((entry) => entry.value === "")
+
+      if (placeholderEntry) {
+        placeholderEntry.consumed = true
+        if (uploadQueue.length > 0) {
+          result[index] = uploadQueue.shift()
+        } else {
+          result[index] = undefined
+        }
+        continue
+      }
+
+      if (uploadQueue.length > 0) {
+        result[index] = uploadQueue.shift()
+      } else {
+        result[index] = undefined
+      }
+    }
+
+    for (const entry of normalizedEntries) {
+      if (entry.consumed) {
+        continue
+      }
+
+      if (entry.value === "") {
+        if (uploadQueue.length > 0) {
+          result.push(uploadQueue.shift())
+        } else {
+          result.push(undefined)
+        }
+      } else {
+        result.push(entry.value)
+      }
+    }
+
+    while (uploadQueue.length > 0) {
+      result.push(uploadQueue.shift())
+    }
+
+    const expectedLength = Math.max(
+      result.length,
+      originalUrls?.length || 0,
+      pendingOrigIds?.length || 0,
+      existingOrigs.length,
+    )
+
+    while (result.length < expectedLength) {
+      result.push(undefined)
+    }
+
+    return result
+  }
+
+  /**
    * 预处理文件操作，在事务外部执行耗时操作
    * 优化：先比较新请求与现有记录，只处理不一致的项
    */
   private async prepareFileOperationsForUpdate(
     archiveId: number,
     userAgent: string,
-    files?: (Express.Multer.File | string)[],
+    files?: Array<Express.Multer.File | string | undefined>,
     originalUrls?: string[],
+    pendingOrigIds?: (number | null)[],
+    allowedPendingSenderEmails: string[] = [],
     titlePrefix?: string,
     authors?: string[],
     date?: string,
@@ -593,12 +877,12 @@ export class ArchivesService {
     remarks?: string,
   ): Promise<FileOperationResult[]> {
     // 如果没有任何文件相关参数，直接返回空数组
-    if (!files?.length && !originalUrls?.length) {
+    if (!files?.length && !originalUrls?.length && !pendingOrigIds?.length) {
       return []
     }
 
     this.logger.log(
-      `Processing file operations for archive ${archiveId}: files=${files?.length || 0}, originalUrls=${originalUrls?.length || 0}`,
+      `Processing file operations for archive ${archiveId}: files=${files?.length || 0}, originalUrls=${originalUrls?.length || 0}, pendingOrigIds=${pendingOrigIds?.length || 0}`,
     )
 
     // 获取现有文件记录，按索引排序
@@ -611,6 +895,7 @@ export class ArchivesService {
     const maxLength = Math.max(
       files?.length || 0,
       originalUrls?.length || 0,
+      pendingOrigIds?.length || 0,
       existingFiles.length,
     )
 
@@ -621,18 +906,22 @@ export class ArchivesService {
       const fileItem = files?.[i]
       const originalUrl = originalUrls?.[i]
       const existingFile = existingFiles[i]
+      const pendingOrigId = pendingOrigIds?.[i]
+
+      const hasPendingOrig =
+        typeof pendingOrigId === "number" && Number.isInteger(pendingOrigId)
 
       // 判断是否有操作
-      const hasFileOperation = fileItem !== undefined
+      const hasFileOperation = !hasPendingOrig && fileItem !== undefined
       const hasOriginalUrl =
         originalUrl !== undefined && originalUrl.trim() !== ""
 
       this.logger.log(
-        `Position ${i}: hasFileOperation=${hasFileOperation} (${typeof fileItem}), hasOriginalUrl=${hasOriginalUrl}, existingFile=${!!existingFile}`,
+        `Position ${i}: hasFileOperation=${hasFileOperation} (${typeof fileItem}), hasOriginalUrl=${hasOriginalUrl}, hasPendingOrig=${hasPendingOrig}, existingFile=${!!existingFile}`,
       )
 
       // 如果该位置既没有文件操作也没有URL操作，删除现有文件（如果存在）
-      if (!hasFileOperation && originalUrl === undefined) {
+      if (!hasFileOperation && originalUrl === undefined && !hasPendingOrig) {
         if (existingFile) {
           operations.push({
             position: i,
@@ -644,7 +933,7 @@ export class ArchivesService {
       }
 
       // 如果该位置没有文件操作但有空字符串的originalUrl，保持现有文件不变
-      if (!hasFileOperation && originalUrl === "") {
+      if (!hasFileOperation && !hasPendingOrig && originalUrl === "") {
         // 保持现有文件不变，跳过处理
         operations.push({
           position: i,
@@ -658,6 +947,7 @@ export class ArchivesService {
       const isConsistentWithExisting = this.isFileConsistentWithExisting(
         fileItem,
         originalUrl,
+        pendingOrigId,
         existingFile,
       )
 
@@ -673,16 +963,46 @@ export class ArchivesService {
 
       // 不一致，需要更新该位置的文件，先准备新文件数据
       let storageFilename: string
-      let fileType: string
+      let fileType: string | undefined
       let finalOriginalUrl: string | null = null
+      let effectivePendingOrigId: number | undefined
 
       // 处理originalUrl：如果提供了非空URL，保存为originalUrl字段
       if (hasOriginalUrl) {
         finalOriginalUrl = originalUrl.trim()
       }
 
-      // 优先处理文件上传，只有在没有文件上传时才考虑URL抓取
-      if (hasFileOperation) {
+      if (hasPendingOrig) {
+        if (allowedPendingSenderEmails.length === 0) {
+          throw new BadRequestException({
+            success: false,
+            data: null,
+            message: "User is not authorized to use pending files",
+          })
+        }
+
+        const pendingOrig =
+          await this.prismaService.pendingArchiveOrig.findFirst({
+            where: {
+              id: pendingOrigId!,
+              status: "pending",
+              senderEmail: { in: allowedPendingSenderEmails },
+            },
+          })
+
+        if (!pendingOrig) {
+          throw new BadRequestException({
+            success: false,
+            data: null,
+            message: `Pending file with ID ${pendingOrigId} is not available`,
+          })
+        }
+
+        storageFilename = pendingOrig.storageUrl
+        fileType = pendingOrig.fileType || undefined
+        finalOriginalUrl = null
+        effectivePendingOrigId = pendingOrig.id
+      } else if (hasFileOperation) {
         // 有文件操作，根据files内容处理
         if (typeof fileItem === "string") {
           // files[i]是storageUrl字符串，直接使用
@@ -729,10 +1049,11 @@ export class ArchivesService {
         position: i,
         action: "create",
         data: {
-          originalUrl: finalOriginalUrl || undefined,
+          originalUrl: finalOriginalUrl ?? undefined,
           storageUrl: storageFilename,
           fileType,
           storageType: "s3",
+          pendingOrigId: effectivePendingOrigId,
         },
         existingFileId: existingFile?.id,
       })
@@ -747,10 +1068,15 @@ export class ArchivesService {
   private isFileConsistentWithExisting(
     fileItem: Express.Multer.File | string | undefined,
     originalUrl: string | undefined,
+    pendingOrigId: number | null | undefined,
     existingFile: any,
   ): boolean {
     // 如果没有现有文件，肯定不一致
     if (!existingFile) {
+      return false
+    }
+
+    if (typeof pendingOrigId === "number") {
       return false
     }
 
@@ -808,21 +1134,45 @@ export class ArchivesService {
           where: { id: operation.existingFileId },
         })
       } else if (operation.action === "create") {
-        // 如果有现有文件，先删除
-        if (operation.existingFileId) {
-          await prisma.archiveOrig.delete({
-            where: { id: operation.existingFileId },
-          })
-        }
-
         // 创建新记录
         if (operation.data) {
-          await prisma.archiveOrig.create({
-            data: {
-              archiveId,
-              ...operation.data,
-            },
-          })
+          const {
+            pendingOrigId,
+            originalUrl,
+            storageUrl,
+            storageType,
+            fileType,
+          } = operation.data
+
+          const recordData = {
+            storageUrl,
+            storageType,
+            fileType: fileType ?? null,
+            originalUrl: originalUrl ?? null,
+          }
+
+          if (operation.existingFileId) {
+            await prisma.archiveOrig.update({
+              where: { id: operation.existingFileId },
+              data: {
+                ...recordData,
+              },
+            })
+          } else {
+            await prisma.archiveOrig.create({
+              data: {
+                archiveId,
+                ...recordData,
+              },
+            })
+          }
+
+          if (pendingOrigId) {
+            await prisma.pendingArchiveOrig.update({
+              where: { id: pendingOrigId },
+              data: { status: "archived" },
+            })
+          }
         }
       }
       // "keep" 操作不需要做任何事情
@@ -968,6 +1318,7 @@ export class ArchivesService {
 
   async create(
     createArchiveDto: CreateArchiveDto,
+    user: User,
     userAgent: string,
     files?: Express.Multer.File[],
   ) {
@@ -979,12 +1330,17 @@ export class ArchivesService {
     }
 
     try {
-      // 检查是否提供了文件或URL
-      if (!files?.length && !archive.originalUrls?.length) {
+      // 检查是否提供了文件、URL或待处理文件ID
+      if (
+        !files?.length &&
+        !archive.originalUrls?.length &&
+        !archive.pendingOrigIds?.length
+      ) {
         throw new BadRequestException({
           success: false,
           data: null,
-          message: "Either files or originalUrls must be provided",
+          message:
+            "At least one of the following must be provided: files (for file upload), originalUrls (for URL fetching), or pendingOrigIds (for pending files)",
         })
       }
 
@@ -992,14 +1348,34 @@ export class ArchivesService {
       const fileProcessingItems = this.prepareFileProcessingItems(
         files,
         archive.originalUrls,
+        archive.pendingOrigIds,
       )
 
       if (fileProcessingItems.length === 0) {
         throw new BadRequestException({
           success: false,
           data: null,
-          message: "No valid files or URLs provided",
+          message: "No valid files, URLs, or pending file IDs provided",
         })
+      }
+
+      const pendingOrigIds =
+        archive.pendingOrigIds?.filter(
+          (id): id is number => typeof id === "number" && Number.isInteger(id),
+        ) || []
+
+      let allowedPendingSenderEmails: string[] = []
+
+      if (pendingOrigIds.length > 0) {
+        allowedPendingSenderEmails = await this.getUserWhitelistEmails(user.id)
+
+        if (allowedPendingSenderEmails.length === 0) {
+          throw new BadRequestException({
+            success: false,
+            data: null,
+            message: "User has no authorized pending file sources",
+          })
+        }
       }
 
       // 处理文件项目
@@ -1013,6 +1389,7 @@ export class ArchivesService {
         archive.chapter,
         archive.tags,
         archive.remarks,
+        allowedPendingSenderEmails,
       )
 
       if (processedFiles.length === 0) {
@@ -1046,6 +1423,14 @@ export class ArchivesService {
                 storageType: "s3",
               },
             })
+
+            // 如果是待处理文件，更新其状态为已归档
+            if (processedFile.pendingOrigId) {
+              await prisma.pendingArchiveOrig.update({
+                where: { id: processedFile.pendingOrigId },
+                data: { status: "archived" },
+              })
+            }
           }
 
           // 处理标签关系
@@ -1248,6 +1633,7 @@ export class ArchivesService {
   async update(
     id: number,
     updateArchiveDto: UpdateArchiveDto,
+    user: User,
     userAgent: string,
     files?: Express.Multer.File[],
   ) {
@@ -1255,15 +1641,48 @@ export class ArchivesService {
       // 验证章节类别（更新时可选但如果提供必须有效）
       this.validateChapter(updateArchiveDto.chapter)
 
-      await this.findOne(id, false)
+      const existingArchiveResponse = (await this.findOne(id, false)) as {
+        data?: { origs?: Array<{ storageUrl: string | null }> }
+      }
+      const existingOrigsForOrder = existingArchiveResponse?.data?.origs || []
 
       // 预处理文件操作（在事务外部执行耗时操作）
       // 将 Express.Multer.File[] 转换为 (Express.Multer.File | string)[] 类型
+      const pendingOrigIds =
+        updateArchiveDto.pendingOrigIds?.filter(
+          (pendingId): pendingId is number =>
+            typeof pendingId === "number" && Number.isInteger(pendingId),
+        ) || []
+
+      let allowedPendingSenderEmails: string[] = []
+
+      if (pendingOrigIds.length > 0) {
+        allowedPendingSenderEmails = await this.getUserWhitelistEmails(user.id)
+
+        if (allowedPendingSenderEmails.length === 0) {
+          throw new BadRequestException({
+            success: false,
+            data: null,
+            message: "User has no authorized pending file sources",
+          })
+        }
+      }
+
+      const mixedFileInputs = this.buildMixedFileInputsForUpdate(
+        updateArchiveDto.files,
+        files,
+        existingOrigsForOrder,
+        updateArchiveDto.originalUrls,
+        updateArchiveDto.pendingOrigIds,
+      )
+
       const fileOperations = await this.prepareFileOperationsForUpdate(
         id,
         userAgent,
-        files as (Express.Multer.File | string)[] | undefined,
+        mixedFileInputs,
         updateArchiveDto.originalUrls,
+        updateArchiveDto.pendingOrigIds,
+        allowedPendingSenderEmails,
         updateArchiveDto.title || "updated",
         updateArchiveDto.authors,
         updateArchiveDto.date,
@@ -1761,6 +2180,52 @@ export class ArchivesService {
       return result
     } catch (error) {
       this.handleError(error, "get search keywords")
+    }
+  }
+
+  async findPendingOrigs(queryDto: QueryPendingOrigsDto, userId: string) {
+    try {
+      const { status = "pending" } = queryDto
+
+      // 获取用户的邮箱白名单
+      const whitelistEmails = await this.getUserWhitelistEmails(userId)
+
+      // 如果用户没有邮箱白名单，返回空数据
+      if (whitelistEmails.length === 0) {
+        return {
+          success: true,
+          data: [],
+          message: "No email whitelist found for user",
+        }
+      }
+
+      const pendingOrigs = await this.prismaService.pendingArchiveOrig.findMany(
+        {
+          where: {
+            status,
+            senderEmail: { in: whitelistEmails },
+          },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            senderEmail: true,
+            messageId: true,
+            subject: true,
+            originalFilename: true,
+            storageUrl: true,
+            fileType: true,
+            status: true,
+          },
+        },
+      )
+
+      return {
+        success: true,
+        data: pendingOrigs,
+        message: "Pending archive origs retrieved successfully",
+      }
+    } catch (error) {
+      this.handleError(error, "fetch pending origs")
     }
   }
 }

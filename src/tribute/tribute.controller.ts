@@ -1,15 +1,18 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Post,
   Query,
   Req,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from "@nestjs/common"
 import { FileInterceptor } from "@nestjs/platform-express"
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiOperation,
@@ -18,6 +21,8 @@ import {
   ApiTags,
 } from "@nestjs/swagger"
 import { Request } from "express"
+import { CurrentUser } from "@/auth/decorators/user.decorator"
+import { JwtAuthGuard } from "@/auth/guards/jwt-auth.guard"
 import { ConfigService } from "@/config/config.service"
 import { multerConfig } from "@/config/configuration/multer.config"
 import { TributeFileUploadDto } from "./dto/file-upload.dto"
@@ -32,6 +37,8 @@ export class TributeController {
   ) {}
 
   @Get("info")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: "获取链接信息" })
   @ApiQuery({
     name: "link",
@@ -92,13 +99,19 @@ export class TributeController {
       },
     },
   })
-  getInfo(@Query("link") link: string, @Req() req: Request) {
+  getInfo(
+    @Query("link") link: string,
+    @CurrentUser() user: any,
+    @Req() req: Request,
+  ) {
     const userAgent =
       req.headers["user-agent"] || this.configService.fallbackUserAgent
     return this.tributeService.getInfo(link, userAgent)
   }
 
   @Post("extract-html")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: "从HTML文件提取内容" })
   @ApiResponse({
     status: 200,
@@ -141,12 +154,15 @@ export class TributeController {
   })
   @ApiResponse({
     status: 400,
-    description: "文件是必需的",
+    description: "请求参数缺失或无效",
     schema: {
       type: "object",
       properties: {
         success: { type: "boolean", example: false },
-        message: { type: "string", example: "File is required" },
+        message: {
+          type: "string",
+          example: "Either file or pendingOrigId must be provided",
+        },
       },
     },
   })
@@ -165,17 +181,44 @@ export class TributeController {
       },
     },
   })
-  @ApiBody({ type: TributeFileUploadDto })
+  @ApiBody({
+    type: TributeFileUploadDto,
+    description: "提供文件或 pendingOrigId（二者至少一个）",
+  })
   @ApiConsumes("multipart/form-data")
   @UseInterceptors(FileInterceptor("file", multerConfig))
-  extractHtml(@UploadedFile() file: Express.Multer.File) {
-    if (!file) {
+  extractHtml(
+    @CurrentUser() user: any,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: TributeFileUploadDto,
+  ) {
+    const rawPendingOrigId = body?.pendingOrigId
+    const pendingOrigId =
+      rawPendingOrigId === undefined || rawPendingOrigId === null
+        ? undefined
+        : Number(rawPendingOrigId)
+
+    if (
+      pendingOrigId !== undefined &&
+      (Number.isNaN(pendingOrigId) || pendingOrigId < 1)
+    ) {
       throw new BadRequestException({
         success: false,
-        message: "File is required",
+        message: "pendingOrigId must be a positive number",
       })
     }
 
-    return this.tributeService.extractHtml(file)
+    if (!file && pendingOrigId === undefined) {
+      throw new BadRequestException({
+        success: false,
+        message: "Either file or pendingOrigId must be provided",
+      })
+    }
+
+    return this.tributeService.extractHtml({
+      user,
+      file,
+      pendingOrigId,
+    })
   }
 }

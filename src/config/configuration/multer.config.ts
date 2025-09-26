@@ -3,25 +3,23 @@ import { extname } from "node:path"
 import { BadRequestException } from "@nestjs/common"
 import { MulterModuleOptions } from "@nestjs/platform-express"
 import * as iconv from "iconv-lite"
-
-const MAX_FILE_SIZE = 1024 * 1024 * 100 // 100 MB
+import {
+  MAX_FILE_SIZE,
+  SUPPORTED_FILE_EXTENSIONS,
+  SUPPORTED_MIME_TYPES,
+} from "@/common/constants/file-types"
 
 export const multerConfig: MulterModuleOptions = {
   limits: {
     fileSize: MAX_FILE_SIZE,
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     file.originalname = decodeFileName(file.originalname)
-    if (
-      file.mimetype === "text/html" ||
-      file.mimetype === "application/pdf" ||
-      file.mimetype === "image/png" ||
-      file.mimetype === "image/jpeg"
-    ) {
+    if (SUPPORTED_MIME_TYPES.includes(file.mimetype as any)) {
       cb(null, true)
     } else {
       const ext = extname(file.originalname).toLowerCase()
-      if ([".html", ".pdf", ".png", ".jpg", ".jpeg"].includes(ext)) {
+      if (SUPPORTED_FILE_EXTENSIONS.includes(ext as any)) {
         cb(null, true)
       } else {
         cb(new BadRequestException(["Invalid file type"]), false)
