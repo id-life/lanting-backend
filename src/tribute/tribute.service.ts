@@ -14,6 +14,7 @@ import { AwsService } from "@/common/aws/aws.service"
 import { DeepSeekService } from "@/common/deepseek/deepseek.service"
 import { MetadataExtractorService } from "@/common/metadata-extractor/metadata-extractor.service"
 import { PrismaService } from "@/common/prisma/prisma.service"
+import { RedisKeys } from "@/common/redis/redis-keys.config"
 import { ConfigService } from "@/config/config.service"
 
 @Injectable()
@@ -39,7 +40,7 @@ export class TributeService {
       normalizedUrl = `https://${normalizedUrl}`
     }
 
-    const cacheKey = `tribute_info:${normalizedUrl.replace(/\W/g, "_")}`
+    const cacheKey = RedisKeys.tributeInfo(normalizedUrl)
 
     try {
       // 先尝试从缓存获取
@@ -208,7 +209,7 @@ export class TributeService {
   private async buildHtmlExtractionResponse(fileContent: string) {
     // 基于文件内容创建缓存键
     const contentHash = createHash("md5").update(fileContent).digest("hex")
-    const cacheKey = `tribute_extract:${contentHash}`
+    const cacheKey = RedisKeys.tributeExtract(contentHash)
 
     // 先尝试从缓存获取
     const cachedResult = await this.cacheManager.get(cacheKey)
