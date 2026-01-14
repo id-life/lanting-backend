@@ -14,6 +14,7 @@ import { Cache } from "cache-manager"
 import { execa } from "execa"
 import { lookup } from "mime-types"
 import { AwsService } from "@/common/aws/aws.service"
+import { RedisKeys } from "@/common/redis/redis-keys.config"
 import { ConfigService } from "@/config/config.service"
 import { PrismaService } from "../common/prisma/prisma.service"
 import { getValidChapters, isValidChapter } from "./constants/archive-chapters"
@@ -57,10 +58,10 @@ export class ArchivesService {
    */
   private async clearArchiveCache(id: number): Promise<void> {
     await Promise.all([
-      this.cacheManager.del(`archives:v3:${id}`),
-      this.cacheManager.del(`archives:v3:${id}:with-comments`),
-      this.cacheManager.del("archives:v3:all"),
-      this.cacheManager.del(`archive_comments:${id}`),
+      this.cacheManager.del(RedisKeys.archive(id)),
+      this.cacheManager.del(RedisKeys.archiveWithComments(id)),
+      this.cacheManager.del(RedisKeys.archivesAll()),
+      this.cacheManager.del(RedisKeys.archiveComments(id)),
     ])
   }
 
@@ -1529,7 +1530,7 @@ export class ArchivesService {
       )
 
       // 清除归档列表缓存
-      await this.cacheManager.del("archives:v3:all")
+      await this.cacheManager.del(RedisKeys.archivesAll())
 
       return {
         success: true,
@@ -1542,7 +1543,7 @@ export class ArchivesService {
   }
 
   async findAll() {
-    const cacheKey = "archives:v3:all" // 更新缓存版本
+    const cacheKey = RedisKeys.archivesAll()
 
     try {
       // 先尝试从缓存获取
@@ -1574,8 +1575,8 @@ export class ArchivesService {
 
   async findOne(id: number, includeComments: boolean = false) {
     const cacheKey = includeComments
-      ? `archives:v3:${id}:with-comments`
-      : `archives:v3:${id}` // 更新缓存版本
+      ? RedisKeys.archiveWithComments(id)
+      : RedisKeys.archive(id)
 
     try {
       // 先尝试从缓存获取
@@ -1758,7 +1759,7 @@ export class ArchivesService {
       // 清除所有相关文件内容缓存
       if (archive?.origs && archive.origs.length > 0) {
         const cachePromises = archive.origs.map((orig: any) =>
-          this.cacheManager.del(`archive_content:${orig.id}`),
+          this.cacheManager.del(RedisKeys.archiveContent(orig.storageUrl)),
         )
         await Promise.all(cachePromises)
       }
@@ -1845,7 +1846,7 @@ export class ArchivesService {
    * @returns 包含文件内容、MIME类型和文件类型的对象
    */
   async getArchiveContent(archiveFilename: string) {
-    const cacheKey = `archive_content:${archiveFilename}`
+    const cacheKey = RedisKeys.archiveContent(archiveFilename)
 
     try {
       // 先尝试从缓存获取
@@ -1980,7 +1981,7 @@ export class ArchivesService {
   }
 
   async getCommentsByArchive(archiveId: number) {
-    const cacheKey = `archive_comments:${archiveId}`
+    const cacheKey = RedisKeys.archiveComments(archiveId)
 
     try {
       // 验证归档是否存在
@@ -2134,7 +2135,7 @@ export class ArchivesService {
       })
 
       // 清除搜索关键词缓存，因为数据已发生变化
-      await this.cacheManager.del("search_keywords:all")
+      await this.cacheManager.del(RedisKeys.searchKeywordsAll())
 
       return {
         success: true,
@@ -2147,7 +2148,7 @@ export class ArchivesService {
   }
 
   async getSearchKeywords() {
-    const cacheKey = "search_keywords:all"
+    const cacheKey = RedisKeys.searchKeywordsAll()
 
     try {
       // 尝试从缓存获取
