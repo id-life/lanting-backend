@@ -55,6 +55,10 @@ export const appConfigSchema = z.object({
   EMAIL_PORT: z.coerce.number().optional(),
   EMAIL_USERNAME: z.string().optional(),
   EMAIL_PASSWORD: z.string().optional(),
+  EMAIL_WORKER_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>

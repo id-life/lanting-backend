@@ -9,7 +9,8 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "prisma migrate deploy && node dist/main",
+    "start:prod": "node dist/main",
+    "test:migration": "jest --runInBand --detectOpenHandles app.controller.spec.ts health/health.controller.spec.ts common/imapflow/imapflow.migration.spec.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -114,6 +115,9 @@
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

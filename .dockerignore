@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+!.env.bio.example
+node_modules
+dist
+coverage
+test
+*.log
+.DS_Store
+README.md
