@@ -15,8 +15,8 @@ describe("appController", () => {
   })
 
   describe("root", () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe("Hello World!")
+    it("returns the service welcome message", () => {
+      expect(appController.getHello()).toBe("Welcome to lanting-backend!")
     })
   })
 })
