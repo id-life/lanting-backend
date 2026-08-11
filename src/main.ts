@@ -1,4 +1,4 @@
-import { Logger, ValidationPipe } from "@nestjs/common"
+import { Logger, RequestMethod, ValidationPipe } from "@nestjs/common"
 import { NestFactory } from "@nestjs/core"
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger"
 import { AppModule } from "./app.module"
@@ -19,7 +19,12 @@ async function bootstrap() {
   )
 
   if (configService.apiPrefix) {
-    app.setGlobalPrefix(configService.apiPrefix)
+    app.setGlobalPrefix(configService.apiPrefix, {
+      exclude: [
+        { path: "healthz", method: RequestMethod.GET },
+        { path: "readyz", method: RequestMethod.GET },
+      ],
+    })
   }
   app.enableCors()
 

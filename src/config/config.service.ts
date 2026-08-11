@@ -114,4 +114,10 @@ export class ConfigService {
   get emailPassword() {
     return this.nestConfigService.get("app.EMAIL_PASSWORD", { infer: true })
   }
+
+  get emailWorkerEnabled() {
+    return this.nestConfigService.get("app.EMAIL_WORKER_ENABLED", {
+      infer: true,
+    })
+  }
 }

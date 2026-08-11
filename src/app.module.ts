@@ -7,6 +7,7 @@ import { AuthModule } from "./auth/auth.module"
 import { CommonModule } from "./common/common.module"
 import { ConfigModule } from "./config/config.module"
 import { EmailModule } from "./email/email.module"
+import { HealthModule } from "./health/health.module"
 import { TributeModule } from "./tribute/tribute.module"
 
 @Module({
@@ -18,6 +19,7 @@ import { TributeModule } from "./tribute/tribute.module"
     CommonModule,
     EmailModule,
     AuthModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
