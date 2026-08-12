@@ -19,6 +19,10 @@ export class RedisService {
       redisConfig.password = this.configService.redisPassword
     }
 
+    if (this.configService.redisTls) {
+      redisConfig.tls = {}
+    }
+
     this.client = new Redis(redisConfig)
 
     this.client.on("connect", () => {

@@ -11,7 +11,11 @@ import { RedisService } from "./redis.service"
     CacheModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const redisUrl = `redis://${configService.redisPassword ? `${configService.redisPassword}@` : ""}${configService.redisHost}:${configService.redisPort}/${configService.redisDb}`
+        const protocol = configService.redisTls ? "rediss" : "redis"
+        const password = configService.redisPassword
+          ? `:${encodeURIComponent(configService.redisPassword)}@`
+          : ""
+        const redisUrl = `${protocol}://${password}${configService.redisHost}:${configService.redisPort}/${configService.redisDb}`
 
         const keyvRedis = new KeyvRedis(redisUrl)
 
