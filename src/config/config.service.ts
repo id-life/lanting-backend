@@ -71,6 +71,13 @@ export class ConfigService {
     return this.nestConfigService.get("app.REDIS_DB", { infer: true })
   }
 
+  get redisTls() {
+    const configured = this.nestConfigService.get("app.REDIS_TLS", {
+      infer: true,
+    })
+    return configured ?? this.redisHost.endsWith(".cache.amazonaws.com")
+  }
+
   get swaggerEnabled() {
     return this.nestConfigService.get("app.SWAGGER_ENABLED", { infer: true })
   }
