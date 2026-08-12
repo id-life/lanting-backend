@@ -1,0 +1,21 @@
+name: Roll back lanting-backend on EC2
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_release_id:
+        description: Exact previous-good release shown by idctl status
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  rollback:
+    uses: ./.github/workflows/rollback-service-ec2.yml
+    with:
+      service: lanting-backend
+      expected_release_id: ${{ inputs.expected_release_id }}
+      smoke_url: https://migration-lanting-api.id.life/healthz

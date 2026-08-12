@@ -10,11 +10,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: id-life/aws-runtime/.github/workflows/deploy-service.yml@main
+    uses: id-life/lanting-backend/.github/workflows/deploy-service-ec2.yml@main
     with:
       service: lanting-backend-bio
       ecr_repository: lanting-backend
-      docker_context: .
-      dockerfile: Dockerfile
       release_id: ${{ github.sha }}
-      aws_role_arn: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      smoke_url: https://migration-lanting-bio-api.id.life/healthz
