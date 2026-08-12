@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   deploy:
-    uses: id-life/lanting-backend/.github/workflows/deploy-service-ec2.yml@d279d25e3db178427f0ba0f80f7318863f5e5cb6
+    uses: id-life/lanting-backend/.github/workflows/deploy-service-ec2.yml@aa4b776abf76c80f74aa09823518f151c8a4b4a9
     with:
       service: lanting-backend-bio
       ecr_repository: lanting-backend
