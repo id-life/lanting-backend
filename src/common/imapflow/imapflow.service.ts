@@ -55,6 +55,10 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
+    if (!this.configService.emailWorkerEnabled) {
+      this.logger.log("Email worker disabled")
+      return
+    }
     this.logger.log("ImapflowService initializing...")
     await this.initializeEmail()
   }
@@ -411,6 +415,9 @@ export class ImapflowService implements OnModuleInit, OnModuleDestroy {
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async checkSpamEmails() {
+    if (!this.configService.emailWorkerEnabled) {
+      return
+    }
     if (!this.client) {
       return
     }

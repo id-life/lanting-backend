@@ -33,6 +33,10 @@ export const appConfigSchema = z.object({
   REDIS_PORT: z.coerce.number().default(6379),
   REDIS_PASSWORD: z.string().optional(),
   REDIS_DB: z.coerce.number().default(0),
+  REDIS_TLS: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === "true")),
 
   // swagger
   SWAGGER_ENABLED: z
@@ -55,6 +59,10 @@ export const appConfigSchema = z.object({
   EMAIL_PORT: z.coerce.number().optional(),
   EMAIL_USERNAME: z.string().optional(),
   EMAIL_PASSWORD: z.string().optional(),
+  EMAIL_WORKER_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>
