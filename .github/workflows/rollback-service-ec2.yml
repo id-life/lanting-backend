@@ -1,0 +1,207 @@
+name: Roll back service on EC2
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Catalog service id
+        required: true
+        type: string
+      expected_release_id:
+        description: Exact previous-good release currently expected on the host
+        required: true
+        type: string
+      aws_role_arn:
+        description: Optional repository-scoped GitHub OIDC role override
+        required: false
+        default: ''
+        type: string
+      smoke_url:
+        description: Optional public HTTPS health/readiness URL checked after rollback
+        required: false
+        default: ''
+        type: string
+      smoke_expected_status:
+        description: Exact HTTP status required from smoke_url
+        required: false
+        default: 200
+        type: number
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-${{ inputs.service }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      AWS_REGION: ap-southeast-1
+      SERVICE: ${{ inputs.service }}
+      EXPECTED_RELEASE_ID: ${{ inputs.expected_release_id }}
+      SMOKE_URL: ${{ inputs.smoke_url }}
+      SMOKE_EXPECTED_STATUS: ${{ inputs.smoke_expected_status }}
+    steps:
+      - name: Validate rollback inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SERVICE" =~ ^[a-z0-9][a-z0-9-]+$ ]]
+          [[ "$EXPECTED_RELEASE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]
+          if [[ -n "$SMOKE_URL" && ! "$SMOKE_URL" =~ ^https://[A-Za-z0-9.-]+(/[^[:space:]]*)?$ ]]; then
+            echo "smoke_url must be an HTTPS URL without credentials or a custom port" >&2
+            exit 2
+          fi
+          [[ "$SMOKE_EXPECTED_STATUS" =~ ^[1-5][0-9]{2}$ ]]
+
+      - name: Select repository-scoped AWS role
+        id: aws-role
+        shell: bash
+        env:
+          EXPLICIT_ROLE_ARN: ${{ inputs.aws_role_arn }}
+        run: |
+          set -euo pipefail
+          expected_role_arn="arn:aws:iam::550939689070:role/id-life-github-deploy-$SERVICE"
+          role_arn="${EXPLICIT_ROLE_ARN:-$expected_role_arn}"
+          [[ "$role_arn" == "$expected_role_arn" ]]
+          echo "role_arn=$role_arn" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ steps.aws-role.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Roll back through service-scoped SSM document
+        id: rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          document="id-life-rollback-$SERVICE"
+
+          managed_instances="$(aws ssm describe-instance-information \
+            --filters 'Key=tag:Project,Values=id-life' \
+            --output json)"
+          mapfile -t online_instance_ids < <(jq -r \
+            '.InstanceInformationList[] | select(.PingStatus == "Online") | .InstanceId' \
+            <<<"$managed_instances")
+          instance_ids=()
+          if (( ${#online_instance_ids[@]} > 0 )); then
+            exact_instances="$(aws ec2 describe-instances \
+              --instance-ids "${online_instance_ids[@]}" \
+              --filters \
+                'Name=tag:Project,Values=id-life' \
+                'Name=tag:Environment,Values=production' \
+                'Name=instance-state-name,Values=running' \
+              --output json)"
+            mapfile -t instance_ids < <(jq -r \
+              '.Reservations[].Instances[].InstanceId' <<<"$exact_instances")
+          fi
+          if (( ${#instance_ids[@]} != 1 )); then
+            echo "::error title=Unsafe runtime target set::expected exactly one online production runtime host, found ${#instance_ids[@]}"
+            exit 1
+          fi
+          instance_id="${instance_ids[0]}"
+          [[ "$instance_id" =~ ^i-[a-f0-9]+$ ]]
+
+          jq -n --arg release "$EXPECTED_RELEASE_ID" \
+            '{expectedReleaseId:[$release]}' > parameters.json
+          command_id="$(aws ssm send-command \
+            --document-name "$document" \
+            --instance-ids "$instance_id" \
+            --parameters file://parameters.json \
+            --max-concurrency 1 \
+            --max-errors 0 \
+            --query 'Command.CommandId' \
+            --output text)"
+          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
+
+          report_invocation_failure() {
+            local invocation_id="$1" result safe_output
+            result="$(aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$invocation_id" \
+              --output json)"
+            jq -r '"::error title=SSM rollback failed::instance=\(.InstanceId) status=\(.Status) detail=\(.StatusDetails // "unknown") response=\(.ResponseCode // -1)"' <<<"$result"
+            safe_output="$(jq -r '[.StandardErrorContent, .StandardOutputContent] | map(select(type == "string" and length > 0)) | join("\n") | .[0:4096]' <<<"$result" \
+              | sed -E \
+                  -e 's/(AKIA|ASIA)[A-Z0-9]{16}/[REDACTED_AWS_ACCESS_KEY]/g' \
+                  -e 's/([Pp]assword|[Ss]ecret|[Tt]oken|[Aa]uthorization)(["'"'"'=: ]+)[^ ,;]+/\1\2[REDACTED]/g')"
+            if [[ -n "$safe_output" ]]; then
+              echo "::group::Sanitized SSM rollback diagnostic for $invocation_id"
+              while IFS= read -r line; do printf '| %s\n' "$line"; done <<<"$safe_output"
+              echo "::endgroup::"
+            fi
+          }
+
+          completed=false
+          for attempt in $(seq 1 360); do
+            invocations="$(aws ssm list-command-invocations \
+              --command-id "$command_id" \
+              --details \
+              --output json)"
+            invocation_count="$(jq '.CommandInvocations | length' <<<"$invocations")"
+            if (( invocation_count > 1 )); then
+              echo "::error title=Unsafe SSM fan-out::command unexpectedly has $invocation_count invocations"
+              while IFS= read -r failed_instance; do report_invocation_failure "$failed_instance"; done \
+                < <(jq -r '.CommandInvocations[].InstanceId' <<<"$invocations")
+              exit 1
+            fi
+            if (( invocation_count == 1 )); then
+              status="$(jq -r '.CommandInvocations[0].Status' <<<"$invocations")"
+              case "$status" in
+                Success) completed=true; break ;;
+                Failed|TimedOut|Cancelled|Cancelling)
+                  report_invocation_failure "$instance_id"
+                  exit 1
+                  ;;
+              esac
+            fi
+            sleep 5
+          done
+          if [[ "$completed" != "true" ]]; then
+            echo "::error title=SSM rollback timed out::command did not complete within 30 minutes"
+            report_invocation_failure "$instance_id"
+            exit 1
+          fi
+
+      - name: Verify public ALB route
+        if: ${{ inputs.smoke_url != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_status=""
+          for attempt in $(seq 1 12); do
+            actual_status="$(curl \
+              --proto '=https' \
+              --tlsv1.2 \
+              --silent \
+              --show-error \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              --connect-timeout 5 \
+              --max-time 15 \
+              "$SMOKE_URL" || true)"
+            [[ "$actual_status" == "$SMOKE_EXPECTED_STATUS" ]] && break
+            sleep 5
+          done
+          if [[ "$actual_status" != "$SMOKE_EXPECTED_STATUS" ]]; then
+            echo "::error title=Public smoke failed::expected HTTP $SMOKE_EXPECTED_STATUS, received ${actual_status:-network-error}"
+            exit 1
+          fi
+
+      - name: Record rollback summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### EC2 rollback"
+            echo "- Service: \`$SERVICE\`"
+            echo "- Expected previous-good release: \`$EXPECTED_RELEASE_ID\`"
+            echo "- SSM command: \`${{ steps.rollback.outputs.command_id }}\`"
+            if [[ -n "$SMOKE_URL" ]]; then echo "- Public smoke gate: HTTP $SMOKE_EXPECTED_STATUS passed"; fi
+          } >> "$GITHUB_STEP_SUMMARY"

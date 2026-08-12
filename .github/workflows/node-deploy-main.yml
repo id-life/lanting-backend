@@ -5,97 +5,15 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    environment: production
-    permissions:
-      contents: read
-      id-token: write
-    concurrency:
-      group: production-lanting-backend
-      cancel-in-progress: false
-    env:
-      AWS_REGION: ap-southeast-1
-      SERVICE: lanting-backend
-      ECR_REPOSITORY: lanting-backend
-      RELEASE_ID: ${{ github.sha }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate immutable deployment inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$SERVICE" == "lanting-backend" ]]
-          [[ "$ECR_REPOSITORY" == "lanting-backend" ]]
-          [[ "$RELEASE_ID" =~ ^[a-f0-9]{40}$ ]]
-          [[ "$RELEASE_ID" == "$GITHUB_SHA" ]]
-      - uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN || 'arn:aws:iam::550939689070:role/id-life-github-runtime-deploy' }}
-          aws-region: ${{ env.AWS_REGION }}
-      - id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-      - uses: docker/setup-buildx-action@v3
-      - name: Build and push amd64 image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          push: true
-          provenance: mode=max
-          sbom: true
-          tags: ${{ steps.ecr.outputs.registry }}/lanting-backend:${{ github.sha }}
-      - name: Deploy immutable digest through service-scoped SSM document
-        id: deploy
-        shell: bash
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
-        run: |
-          set -euo pipefail
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
-          image="$REGISTRY/$ECR_REPOSITORY@$IMAGE_DIGEST"
-          document="id-life-deploy-$SERVICE"
-          jq -n --arg image "$image" --arg release "$RELEASE_ID" \
-            '{image:[$image],releaseId:[$release],deployRole:["test"],schedulerBatonConfirmed:["false"]}' > parameters.json
-          command_id="$(aws ssm send-command \
-            --document-name "$document" \
-            --targets 'Key=tag:Project,Values=id-life' 'Key=tag:Environment,Values=production' \
-            --parameters file://parameters.json \
-            --max-concurrency 1 \
-            --max-errors 0 \
-            --query 'Command.CommandId' \
-            --output text)"
-          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
-          instance_id=""
-          for attempt in $(seq 1 60); do
-            instance_id="$(aws ssm list-command-invocations --command-id "$command_id" --query 'CommandInvocations[0].InstanceId' --output text)"
-            [[ "$instance_id" =~ ^i-[a-f0-9]+$ ]] && break
-            sleep 2
-          done
-          [[ "$instance_id" =~ ^i-[a-f0-9]+$ ]]
-          status="Pending"
-          for attempt in $(seq 1 180); do
-            status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance_id" --query Status --output text)"
-            case "$status" in
-              Success) break ;;
-              Failed|TimedOut|Cancelled|Cancelling) exit 1 ;;
-            esac
-            sleep 5
-          done
-          [[ "$status" == "Success" ]]
-      - name: Record deployment summary
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo "### EC2 deployment"
-            echo "- Service: \`$SERVICE\`"
-            echo "- Release: \`$RELEASE_ID\`"
-            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
-            echo "- SSM command: \`${{ steps.deploy.outputs.command_id }}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+    uses: ./.github/workflows/deploy-service-ec2.yml
+    with:
+      service: lanting-backend
+      ecr_repository: lanting-backend
+      release_id: ${{ github.sha }}
+      smoke_url: https://migration-lanting-api.id.life/healthz
