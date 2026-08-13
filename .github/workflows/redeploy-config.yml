@@ -1,0 +1,176 @@
+name: Redeploy production configuration
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Lanting production service
+        required: true
+        type: choice
+        options:
+          - lanting-backend
+          - lanting-backend-bio
+      change_reference:
+        description: Auditable config or incident reference; never enter a Secret value
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-${{ inputs.service }}
+  cancel-in-progress: false
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production
+    env:
+      AWS_REGION: ap-southeast-1
+      SERVICE: ${{ inputs.service }}
+      CHANGE_REFERENCE: ${{ inputs.change_reference }}
+    steps:
+      - name: Validate request and select fixed route
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CHANGE_REFERENCE" =~ ^[A-Za-z0-9][A-Za-z0-9._:/@+-]{2,127}$ ]]
+          case "$SERVICE" in
+            lanting-backend)
+              smoke='https://lanting-api.id.life/healthz'
+              ;;
+            lanting-backend-bio)
+              smoke='https://lanting-bio-api.id.life/healthz'
+              ;;
+            *) exit 2 ;;
+          esac
+          echo "smoke_url=$smoke" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: arn:aws:iam::550939689070:role/id-life-github-deploy-${{ inputs.service }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read current immutable release and deploy it with AWSCURRENT
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          desired="$(aws ssm get-parameter --name "/id-life/runtime/desired/$SERVICE" \
+            --query 'Parameter.Value' --output text)"
+          jq -e --arg service "$SERVICE" '
+            .schemaVersion == 1 and .service == $service and
+            (.image | test("@sha256:[a-f0-9]{64}$")) and
+            (.releaseId | test("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")) and
+            (.secretVersion | test("^[A-Za-z0-9-]{1,128}$"))
+          ' <<<"$desired" >/dev/null
+          image="$(jq -er '.image' <<<"$desired")"
+          release="$(jq -er '.releaseId' <<<"$desired")"
+          old_secret="$(jq -er '.secretVersion' <<<"$desired")"
+
+          managed="$(aws ssm describe-instance-information \
+            --filters 'Key=tag:Project,Values=id-life' --output json)"
+          mapfile -t online < <(jq -r \
+            '.InstanceInformationList[] | select(.PingStatus == "Online") | .InstanceId' <<<"$managed")
+          instances=()
+          if (( ${#online[@]} > 0 )); then
+            exact="$(aws ec2 describe-instances --instance-ids "${online[@]}" \
+              --filters 'Name=tag:Project,Values=id-life' \
+                        'Name=tag:Environment,Values=production' \
+                        'Name=instance-state-name,Values=running' --output json)"
+            mapfile -t instances < <(jq -r '.Reservations[].Instances[].InstanceId' <<<"$exact")
+          fi
+          (( ${#instances[@]} == 1 )) || {
+            echo "::error title=Unsafe runtime target set::expected exactly one online production runtime host, found ${#instances[@]}"
+            exit 1
+          }
+          instance="${instances[0]}"
+          jq -n --arg image "$image" --arg release "$release" \
+            '{image:[$image],releaseId:[$release]}' > parameters.json
+          command="$(aws ssm send-command \
+            --document-name "id-life-deploy-$SERVICE" --instance-ids "$instance" \
+            --parameters file://parameters.json --max-concurrency 1 --max-errors 0 \
+            --query 'Command.CommandId' --output text)"
+          {
+            echo "command_id=$command"
+            echo "instance_id=$instance"
+            echo "image=$image"
+            echo "release=$release"
+            echo "old_secret_version=$old_secret"
+          } >> "$GITHUB_OUTPUT"
+
+          report_failure() {
+            local result safe
+            result="$(aws ssm get-command-invocation --command-id "$command" \
+              --instance-id "$instance" --output json)"
+            jq -r '"::error title=Configuration redeploy failed::status=\(.Status) detail=\(.StatusDetails // "unknown") response=\(.ResponseCode // -1)"' <<<"$result"
+            safe="$(jq -r '[.StandardErrorContent,.StandardOutputContent] | map(select(type=="string" and length>0)) | join("\n") | .[0:4096]' <<<"$result" \
+              | sed -E -e 's/(AKIA|ASIA)[A-Z0-9]{16}/[REDACTED_AWS_ACCESS_KEY]/g' \
+                       -e 's/([Pp]assword|[Ss]ecret|[Tt]oken|[Aa]uthorization)(["'"'"'=: ]+)[^ ,;]+/\1\2[REDACTED]/g')"
+            [[ -z "$safe" ]] || printf '%s\n' "$safe"
+          }
+          status=Pending
+          for attempt in $(seq 1 360); do
+            status="$(aws ssm get-command-invocation --command-id "$command" \
+              --instance-id "$instance" --query Status --output text 2>/dev/null || true)"
+            case "$status" in
+              Success) break ;;
+              Failed|TimedOut|Cancelled|Cancelling) report_failure; exit 1 ;;
+            esac
+            sleep 5
+          done
+          [[ "$status" == Success ]] || { report_failure; exit 1; }
+
+      - name: Verify production desired state
+        id: verify
+        shell: bash
+        env:
+          EXPECTED_IMAGE: ${{ steps.deploy.outputs.image }}
+          EXPECTED_RELEASE: ${{ steps.deploy.outputs.release }}
+        run: |
+          set -euo pipefail
+          desired="$(aws ssm get-parameter --name "/id-life/runtime/desired/$SERVICE" \
+            --query 'Parameter.Value' --output text)"
+          jq -e --arg service "$SERVICE" --arg image "$EXPECTED_IMAGE" --arg release "$EXPECTED_RELEASE" '
+            .schemaVersion == 1 and .service == $service and .image == $image and
+            .releaseId == $release and .role == "production" and
+            (.secretVersion | test("^[A-Za-z0-9-]{1,128}$"))
+          ' <<<"$desired" >/dev/null
+          echo "secret_version=$(jq -er '.secretVersion' <<<"$desired")" >> "$GITHUB_OUTPUT"
+
+      - name: Verify public ALB route
+        shell: bash
+        env:
+          SMOKE_URL: ${{ steps.request.outputs.smoke_url }}
+        run: |
+          set -euo pipefail
+          actual=''
+          for attempt in $(seq 1 12); do
+            actual="$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --output /dev/null --write-out '%{http_code}' \
+              --connect-timeout 5 --max-time 15 "$SMOKE_URL" || true)"
+            [[ "$actual" == 200 ]] && break
+            sleep 5
+          done
+          [[ "$actual" == 200 ]] || {
+            echo "::error title=Public smoke failed::expected HTTP 200, received ${actual:-network-error}"
+            exit 1
+          }
+
+      - name: Record configuration redeploy summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### Production configuration redeploy'
+            printf '%s\n' "- Service: \`$SERVICE\`"
+            printf '%s\n' "- Change reference: \`$CHANGE_REFERENCE\`"
+            echo "- Immutable release: \`${{ steps.deploy.outputs.release }}\`"
+            echo "- Previous Secret version: \`${{ steps.deploy.outputs.old_secret_version }}\`"
+            echo "- Applied Secret version: \`${{ steps.verify.outputs.secret_version }}\`"
+            echo "- SSM command: \`${{ steps.deploy.outputs.command_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
